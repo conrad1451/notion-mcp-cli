@@ -128,7 +128,7 @@ def action_search(db):
     pages = [
         p for p in results.get("results", [])
         if p.get("parent", {}).get("database_id", "").replace("-", "") == db["id"].replace("-", "")
-    ][:9]
+    ][:len(KEYS)]
 
     if not pages:
         click.echo("No pages found in this database.")

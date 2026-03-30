@@ -31,12 +31,8 @@ def load_databases():
 
 KEYS = "123456789abcdefghijklmnopqrstuvwxyz"
 
-def hyperlink(text, url):
-    """Wrap text in a terminal OSC 8 hyperlink."""
-    return f"\033]8;;{url}\033\\{text}\033]8;;\033\\"
 
-
-def pick_from_list(items, label_fn, url_fn=None, prompt="Press a key to select, or any other key to quit: "):
+def pick_from_list(items, label_fn, prompt="Press a key to select, or any other key to quit: "):
     """Display a keyed list and return the selected item, or None."""
     key_to_item = {}
     for i, item in enumerate(items):
@@ -44,17 +40,13 @@ def pick_from_list(items, label_fn, url_fn=None, prompt="Press a key to select, 
             break
         key = KEYS[i]
         key_to_item[key] = item
-        label = label_fn(item)
-        if url_fn:
-            url = url_fn(item)
-            if url:
-                label = hyperlink(label, url)
-        click.echo(f"  [{key}] {label}")
+        click.echo(f"  [{key}] {label_fn(item)}")
     click.echo()
     click.echo(prompt, nl=False)
     key = readchar.readkey()
     click.echo(key)
     return key_to_item.get(key)
+
 
 def extract_plain_text(rich_text_list):
     return "".join(block.get("plain_text", "") for block in rich_text_list)
@@ -107,14 +99,6 @@ def read_page(page_id):
     click.echo(content if content.strip() else "(Page is empty)")
     click.echo()
 
-# CHQ: Claude AI added function
-def show_db_properties(db):
-    try:
-        result = notion.databases.retrieve(database_id=db["id"])
-        props = result.get("properties", {})
-        click.echo(f"\n  Properties: {', '.join(props.keys())}")
-    except Exception as e:
-        click.echo(f"  ⚠️  Could not load properties: {e}")
 
 # ── Actions ────────────────────────────────────────────────────────────────────
 
@@ -128,7 +112,7 @@ def action_search(db):
     pages = [
         p for p in results.get("results", [])
         if p.get("parent", {}).get("database_id", "").replace("-", "") == db["id"].replace("-", "")
-    ][:len(KEYS)]
+    ][:9]
 
     if not pages:
         click.echo("No pages found in this database.")
@@ -138,7 +122,6 @@ def action_search(db):
     page = pick_from_list(
         pages,
         label_fn=lambda p: get_page_title(p),
-        url_fn=lambda p: p.get("url"),
         prompt="Press a key to open a page, or any other key to go back: "
     )
     if page:
@@ -218,7 +201,6 @@ COMMANDS = [
 def command_menu(db):
     while True:
         click.echo(f"\n📂 Database: {db['name']}")
-        show_db_properties(db)          # CHQ: Claude AI added function
         click.echo("─" * 40)
         cmd = pick_from_list(
             COMMANDS,

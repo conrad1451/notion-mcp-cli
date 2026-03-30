@@ -5,14 +5,47 @@
 import os
 import json
 import click
+import readchar
 from notion_client import Client
 from dotenv import load_dotenv
-
-import readchar
 
 load_dotenv()
 
 notion = Client(auth=os.environ["NOTION_TOKEN"])
+
+CONFIG_PATH = os.path.join(os.path.dirname(__file__), "databases.json")
+
+
+# ── Config ─────────────────────────────────────────────────────────────────────
+
+def load_databases():
+    if not os.path.exists(CONFIG_PATH):
+        click.echo(f"❌ Config file not found: {CONFIG_PATH}")
+        raise SystemExit(1)
+    with open(CONFIG_PATH) as f:
+        data = json.load(f)
+    return data.get("databases", [])
+
+
+# ── Helpers ────────────────────────────────────────────────────────────────────
+
+KEYS = "123456789abcdefghijklmnopqrstuvwxyz"
+
+
+def pick_from_list(items, label_fn, prompt="Press a key to select, or any other key to quit: "):
+    """Display a keyed list and return the selected item, or None."""
+    key_to_item = {}
+    for i, item in enumerate(items):
+        if i >= len(KEYS):
+            break
+        key = KEYS[i]
+        key_to_item[key] = item
+        click.echo(f"  [{key}] {label_fn(item)}")
+    click.echo()
+    click.echo(prompt, nl=False)
+    key = readchar.readkey()
+    click.echo(key)
+    return key_to_item.get(key)
 
 
 def extract_plain_text(rich_text_list):
@@ -25,15 +58,6 @@ def get_page_title(page):
         if prop.get("type") == "title":
             return extract_plain_text(prop["title"]) or "Untitled"
     return "Untitled"
-
-
-def print_page_summary(page):
-    title = get_page_title(page)
-    page_id = page["id"]
-    url = page.get("url", "")
-    click.echo(f"  📄 {title}")
-    click.echo(f"     ID:  {page_id}")
-    click.echo(f"     URL: {url}")
 
 
 def blocks_to_text(blocks):
@@ -65,92 +89,58 @@ def blocks_to_text(blocks):
     return "\n".join(lines)
 
 
-@click.group()
-def cli():
-    """Notion terminal CLI — read, search, and create pages."""
-    pass
-
-
-@cli.command()
-@click.argument("query")
-@click.option("--limit", default=9, show_default=True, help="Max results to show.")
-def search(query, limit):
-    """Search for pages and press a key to open one."""
-    # import readchar
-
-    KEYS = "123456789abcdefghijklmnopqrstuvwxyz"
-
-
-    """Search your Notion workspace for pages matching QUERY."""
-    click.echo(f"\n🔍 Searching for: \"{query}\"\n")
-    results = notion.search(query=query, filter={"property": "object", "value": "page"})
-    pages = results.get("results", [])[:limit]
-    if not pages:
-        click.echo("No pages found.")
-        return
-
-
-    # Print results with keys
-    key_to_page = {}
-    for i, page in enumerate(pages):
-        key = KEYS[i]
-        key_to_page[key] = page
-        title = get_page_title(page)
-        url = page.get("url", "")
-        click.echo(f"  [{key}] 📄 {title}")
-        click.echo(f"       {url}")
-        click.echo()
-
-    click.echo("Press a key to open a page, or any other key to quit: ", nl=False)
-
-    key = readchar.readkey()
-    click.echo(key)
-
-    if key not in key_to_page:
-        click.echo("No matching key, exiting.")
-        return
-
-    page = key_to_page[key]
-    page_id = page["id"]
+def read_page(page_id):
+    page = notion.pages.retrieve(page_id=page_id)
     title = get_page_title(page)
-
     click.echo(f"\n📄 {title}")
-
     click.echo("─" * 50)
     blocks = notion.blocks.children.list(block_id=page_id)
     content = blocks_to_text(blocks.get("results", []))
     click.echo(content if content.strip() else "(Page is empty)")
     click.echo()
 
-    #click.echo(f"Found {len(pages)} result(s):\n")
-    #for page in pages:
-    #    print_page_summary(page)
-    #    click.echo()
+
+# ── Actions ────────────────────────────────────────────────────────────────────
+
+def action_search(db):
+    query = click.prompt("\n🔍 Search query")
+    results = notion.search(
+        query=query,
+        filter={"property": "object", "value": "page"}
+    )
+    # Filter to pages that live inside this database
+    pages = [
+        p for p in results.get("results", [])
+        if p.get("parent", {}).get("database_id", "").replace("-", "") == db["id"].replace("-", "")
+    ][:9]
+
+    if not pages:
+        click.echo("No pages found in this database.")
+        return
+
+    click.echo(f"\nFound {len(pages)} result(s):\n")
+    page = pick_from_list(
+        pages,
+        label_fn=lambda p: get_page_title(p),
+        prompt="Press a key to open a page, or any other key to go back: "
+    )
+    if page:
+        read_page(page["id"])
+    else:
+        click.echo("No page selected.")
 
 
-@cli.command()
-@click.argument("page_id")
-def read(page_id):
-    """Read the content of a page by its PAGE_ID."""
+def action_read(db):
+    page_id = click.prompt("\n📄 Enter page ID")
     try:
-        page = notion.pages.retrieve(page_id=page_id)
-        title = get_page_title(page)
-        click.echo(f"\n📄 {title}")
-        click.echo("─" * 50)
-        blocks = notion.blocks.children.list(block_id=page_id)
-        content = blocks_to_text(blocks.get("results", []))
-        click.echo(content if content.strip() else "(Page is empty)")
-        click.echo()
+        read_page(page_id)
     except Exception as e:
         click.echo(f"❌ Error: {e}")
 
 
-@cli.command()
-@click.argument("title")
-@click.option("--parent-id", required=True, help="Page ID of the parent page.")
-@click.option("--body", default="", help="Optional body text for the page.")
-def create(title, parent_id, body):
-    """Create a new page with TITLE under the given parent page."""
+def action_create(db):
+    title = click.prompt("\n✏️  Page title")
+    body = click.prompt("Body text (optional, press Enter to skip)", default="")
     children = []
     if body:
         children.append({
@@ -162,7 +152,7 @@ def create(title, parent_id, body):
         })
     try:
         page = notion.pages.create(
-            parent={"type": "page_id", "page_id": parent_id},
+            parent={"type": "database_id", "database_id": db["id"]},
             properties={
                 "title": {
                     "title": [{"type": "text", "text": {"content": title}}]
@@ -177,11 +167,9 @@ def create(title, parent_id, body):
         click.echo(f"❌ Error: {e}")
 
 
-@cli.command()
-@click.argument("page_id")
-@click.argument("text")
-def append(page_id, text):
-    """Append a paragraph of TEXT to an existing page."""
+def action_append(db):
+    page_id = click.prompt("\n📎 Enter page ID to append to")
+    text = click.prompt("Text to append")
     try:
         notion.blocks.children.append(
             block_id=page_id,
@@ -196,6 +184,64 @@ def append(page_id, text):
         click.echo(f"\n✅ Appended text to page {page_id}\n")
     except Exception as e:
         click.echo(f"❌ Error: {e}")
+
+
+# ── Command menu ───────────────────────────────────────────────────────────────
+
+COMMANDS = [
+    {"label": "Search pages",      "fn": action_search},
+    {"label": "Read page by ID",   "fn": action_read},
+    {"label": "Create page",       "fn": action_create},
+    {"label": "Append to page",    "fn": action_append},
+    {"label": "Switch database",   "fn": None},
+    {"label": "Quit",              "fn": None},
+]
+
+
+def command_menu(db):
+    while True:
+        click.echo(f"\n📂 Database: {db['name']}")
+        click.echo("─" * 40)
+        cmd = pick_from_list(
+            COMMANDS,
+            label_fn=lambda c: c["label"],
+            prompt="Choose an action: "
+        )
+
+        if cmd is None or cmd["label"] == "Quit":
+            click.echo("\nGoodbye 👋\n")
+            raise SystemExit(0)
+        elif cmd["label"] == "Switch database":
+            return  # bubble back up to db selector
+        else:
+            try:
+                cmd["fn"](db)
+            except Exception as e:
+                click.echo(f"❌ Error: {e}")
+
+
+# ── Entry point ────────────────────────────────────────────────────────────────
+
+@click.command()
+def cli():
+    """Notion terminal CLI — interactive database selector."""
+    databases = load_databases()
+
+    if not databases:
+        click.echo("❌ No databases found in databases.json")
+        raise SystemExit(1)
+
+    while True:
+        click.echo("\n🗂  Select a database:\n")
+        db = pick_from_list(
+            databases,
+            label_fn=lambda d: d["name"],
+            prompt="Press a key to select: "
+        )
+        if db is None:
+            click.echo("\nGoodbye 👋\n")
+            break
+        command_menu(db)
 
 
 if __name__ == "__main__":

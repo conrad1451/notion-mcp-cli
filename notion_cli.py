@@ -99,6 +99,14 @@ def read_page(page_id):
     click.echo(content if content.strip() else "(Page is empty)")
     click.echo()
 
+# CHQ: Claude AI added function
+def show_db_properties(db):
+    try:
+        result = notion.databases.retrieve(database_id=db["id"])
+        props = result.get("properties", {})
+        click.echo(f"\n  Properties: {', '.join(props.keys())}")
+    except Exception as e:
+        click.echo(f"  ⚠️  Could not load properties: {e}")
 
 # ── Actions ────────────────────────────────────────────────────────────────────
 
@@ -201,6 +209,7 @@ COMMANDS = [
 def command_menu(db):
     while True:
         click.echo(f"\n📂 Database: {db['name']}")
+        show_db_properties(db)          # CHQ: Claude AI added function
         click.echo("─" * 40)
         cmd = pick_from_list(
             COMMANDS,

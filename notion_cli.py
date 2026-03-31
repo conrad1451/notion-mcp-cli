@@ -118,20 +118,61 @@ def show_db_properties(db):
 
 # ── Actions ────────────────────────────────────────────────────────────────────
 
+# CHQ: Claude AI updated to allow searching by specific properties
 def action_search(db):
-    query = click.prompt("\n🔍 Search query")
-    results = notion.search(
-        query=query,
-        filter={"property": "object", "value": "page"}
+    # Step 1: pick search field
+    SEARCH_FIELDS = [
+        {"label": "Name (title)", "type": "title"},
+        {"label": "Tags",         "type": "multi_select"},
+        {"label": "Area",         "type": "select"},
+        {"label": "Type",         "type": "select"},
+    ]
+
+    click.echo("\n🔎 Search by:\n")
+    field = pick_from_list(
+        SEARCH_FIELDS,
+        label_fn=lambda f: f["label"],
+        prompt="Pick a field: "
     )
-    # Filter to pages that live inside this database
-    pages = [
-        p for p in results.get("results", [])
-        if p.get("parent", {}).get("database_id", "").replace("-", "") == db["id"].replace("-", "")
-    ][:len(KEYS)]
+    if field is None:
+        click.echo("No field selected.")
+        return
+
+    query = click.prompt(f"\n  Enter {field['label']} to search for")
+
+    # Step 2: build filter based on field type
+    notion_field = field["label"] if field["label"] != "Name (title)" else "Name"
+
+    if field["type"] == "title":
+        db_filter = {
+            "property": notion_field,
+            "title": {"contains": query}
+        }
+    elif field["type"] == "multi_select":
+        db_filter = {
+            "property": notion_field,
+            "multi_select": {"contains": query}
+        }
+    elif field["type"] == "select":
+        db_filter = {
+            "property": notion_field,
+            "select": {"equals": query}
+        }
+
+    # Step 3: query the database
+    try:
+        results = notion.databases.query(
+            database_id=db["id"],
+            filter=db_filter
+        )
+    except Exception as e:
+        click.echo(f"❌ Error querying database: {e}")
+        return
+
+    pages = results.get("results", [])[:len(KEYS)]
 
     if not pages:
-        click.echo("No pages found in this database.")
+        click.echo(f"\nNo pages found where {field['label']} contains \"{query}\".")
         return
 
     click.echo(f"\nFound {len(pages)} result(s):\n")
@@ -145,7 +186,6 @@ def action_search(db):
         read_page(page["id"])
     else:
         click.echo("No page selected.")
-
 
 def action_read(db):
     page_id = click.prompt("\n📄 Enter page ID")

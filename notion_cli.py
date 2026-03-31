@@ -30,6 +30,7 @@ def load_databases():
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
 KEYS = "123456789abcdefghijklmnopqrstuvwxyz"
+KEYS_EXPANDED = "123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 
 def hyperlink(text, url):
     """Wrap text in a terminal OSC 8 hyperlink."""
@@ -40,9 +41,9 @@ def pick_from_list(items, label_fn, url_fn=None, prompt="Press a key to select, 
     """Display a keyed list and return the selected item, or None."""
     key_to_item = {}
     for i, item in enumerate(items):
-        if i >= len(KEYS):
+        if i >= len(KEYS_EXPANDED):
             break
-        key = KEYS[i]
+        key = KEYS_EXPANDED[i]
         key_to_item[key] = item
         label = label_fn(item)
         if url_fn:
@@ -169,7 +170,7 @@ def action_search(db):
         click.echo(f"❌ Error querying database: {e}")
         return
 
-    pages = results.get("results", [])[:len(KEYS)]
+    pages = results.get("results", [])[:len(KEYS_EXPANDED)]
 
     if not pages:
         click.echo(f"\nNo pages found where {field['label']} contains \"{query}\".")

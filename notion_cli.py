@@ -382,6 +382,7 @@ def action_search_multi_tags_gemini_v1(db):
     #  or you can pass it in if you prefer)
     try:
         file_path = os.path.join(os.path.dirname(__file__), "database_metadata/", "tag_categories.json")
+        # file_path = os.path.join(os.path.dirname(__file__), "database_metadata/", "cspart.json")
         with open(file_path, 'r') as f:
             tag_hierarchy = json.load(f)
     except Exception as e:
@@ -509,13 +510,26 @@ def action_search_multi_tags(db):
         # 2. Select Subcategory
         subs_dict = tag_hierarchy.get(selected_cat, {})
         subcategories = list(subs_dict.keys())
-        click.echo(f"\n📁 {selected_cat} > Select Subcategory:")
         selected_sub = pick_from_list(subcategories, label_fn=lambda s: s, key_list=KEYS_EXPANDED)
         if not selected_sub: continue
 
-        # 3. Select Multiple Tags
-        tags_list = subs_dict[selected_sub]
-        click.echo(f"\n🏷️  {selected_cat} > {selected_sub} > Toggle Tags:")
+        # CHQ: Gemini AI refactored
+        # 3. DETECTION LOGIC: Object vs List
+        target_data = subs_dict[selected_sub]
+
+        if isinstance(target_data, dict):
+            # It's an object (e.g., "Programming Fundamentals" contains "software paradigms")
+            # We need one more level of nesting
+            leaf_options = list(target_data.keys())
+            click.echo(f"\n📂 {selected_sub} > Select Type:")
+            selected_leaf = pick_from_list(leaf_options, label_fn=lambda l: l, key_list=KEYS_EXPANDED)
+            if not selected_leaf: continue
+            tags_list = target_data[selected_leaf]
+        else:
+            # It's already a list (e.g., "Languages & Runtimes" is [ "Python", "Go", ... ])
+            tags_list = target_data
+
+        # 4. Select Multiple Tags (Now it will always be the list of strings)
         new_selections = pick_multi_from_list(
             tags_list,
             label_fn=lambda t: t,

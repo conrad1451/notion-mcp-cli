@@ -58,7 +58,7 @@ def pick_from_list(items, label_fn, key_list=KEYS_FEW, url_fn=None, prompt="Pres
     click.echo(key)
     return key_to_item.get(key)
 
-def pick_multi_from_list(items, label_fn, list_size=KEYS_FEW, url_fn=None, prompt="Space to toggle, Enter to confirm: "):
+def pick_multi_from_list_old(items, label_fn, list_size=KEYS_FEW, url_fn=None, prompt="Space to toggle, Enter to confirm: "):
     """Display a keyed list, allow multiple selections, return list of selected items."""
     key_to_item = {}
     key_to_index = {}
@@ -114,6 +114,61 @@ def pick_multi_from_list(items, label_fn, list_size=KEYS_FEW, url_fn=None, promp
             click.echo()
             return []
 
+# CHQ: Gemini AI refactored
+def pick_multi_from_list(items, label_fn, list_size=KEYS_FEW, url_fn=None, prompt="Space to toggle, Enter to confirm: "):
+    key_to_item = {}
+    selected_keys = set()
+
+    for i, item in enumerate(items):
+        if i >= len(list_size):
+            break
+        key = list_size[i]
+        key_to_item[key] = item
+
+    def render():
+        # Clear screen and move cursor to top
+        click.echo("\033[2J\033[H", nl=False)
+        for key, item in key_to_item.items():
+            label = label_fn(item)
+            marker = "✓" if key in selected_keys else " "
+            click.echo(f"  [{key}] {marker} {label}")
+        
+        click.echo()
+        selected_labels = [label_fn(key_to_item[k]) for k in list_size if k in selected_keys]
+        click.echo(f"  Selected: {', '.join(selected_labels) if selected_labels else 'none'}")
+        click.echo()
+        click.echo(prompt, nl=False)
+
+    render()
+
+    while True:
+        key = readchar.readkey()
+
+        # Handle Enter (Confirm)
+        if key in (readchar.key.ENTER, "\r", "\n"):
+            click.echo()
+            return [key_to_item[k] for k in list_size if k in selected_keys]
+
+        # Handle Space (Toggle)
+        elif key in (readchar.key.SPACE, " ", "\x20"):
+            # If your terminal isn't sending a key BEFORE the space, 
+            # we need to know which key the user wants to toggle.
+            # Usually, in this UI, users press the 'key' (e.g., '2') to toggle.
+            pass 
+
+        # Handle Selection Keys (e.g., '1', '2', 'a', 'b')
+        elif key in key_to_item:
+            if key in selected_keys:
+                selected_keys.discard(key)
+            else:
+                selected_keys.add(key)
+        
+        # Handle Escape or Ctrl+C (Cancel/Back)
+        elif key in (readchar.key.ESC, "\x1b"):
+            click.echo("\nCancelled.")
+            return []
+
+        render()
 def extract_plain_text(rich_text_list):
     return "".join(block.get("plain_text", "") for block in rich_text_list)
 

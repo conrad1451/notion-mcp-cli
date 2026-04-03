@@ -303,7 +303,7 @@ def action_search(db):
         click.echo("No page selected.")
 
 # CHQ: Claude AI created this function
-def action_search_multi_tags(db):
+def action_search_multi_tags_old(db):
     # Step 1: fetch all unique tags from the database
     click.echo("\n⏳ Loading tags...")
     try:
@@ -374,6 +374,195 @@ def action_search_multi_tags(db):
     else:
         click.echo("No page selected.")
 
+# CHQ: Gemini AI generated function
+# CHQ: Gemini AI updated to be fully integrated with Notion logic
+def action_search_multi_tags_gemini_v1(db):
+    # 0. Load the local tag category file
+    # (Doing this inside the function ensures it's fresh, 
+    #  or you can pass it in if you prefer)
+    try:
+        file_path = os.path.join(os.path.dirname(__file__), "database_metadata/", "tag_categories.json")
+        with open(file_path, 'r') as f:
+            tag_hierarchy = json.load(f)
+    except Exception as e:
+        click.echo(f"❌ Could not load tag_categories.json: {e}")
+        return
+
+    # 1. Select Category (using your custom picker)
+    categories = list(tag_hierarchy.keys())
+    click.echo("\n📂 Select a Category:")
+    selected_cat = pick_from_list(
+        categories, 
+        label_fn=lambda c: c, 
+        key_list=KEYS, 
+        prompt="Pick a category: "
+    )
+    if not selected_cat: return
+
+    # CHQ: GEmini AI added the check for nonexistent subcategories
+    # 2. Select Subcategory
+    subs_dict = tag_hierarchy.get(selected_cat, {})
+    subcategories = list(subs_dict.keys())
+    if not subcategories:
+        click.echo("No subcategories found for this selection.")
+        return
+    
+    click.echo(f"\n📁 {selected_cat} > Select Subcategory:")
+    selected_sub = pick_from_list(
+        subcategories, 
+        label_fn=lambda s: s, 
+        key_list=KEYS, 
+        prompt="Pick a subcategory: "
+    )
+    if not selected_sub: return
+
+    # 3. Select Multiple Tags (using your multi-picker)
+    tags_list = tag_hierarchy[selected_cat][selected_sub]
+    click.echo(f"\n🏷️  {selected_cat} > {selected_sub} > Toggle Tags:")
+    selected_tags = pick_multi_from_list(
+        tags_list,
+        label_fn=lambda t: t,
+        list_size=KEYS_EXPANDED
+    )
+
+    if not selected_tags:
+        click.echo("No tags selected.")
+        return
+
+    # 4. PERFORM THE ACTUAL NOTION SEARCH
+    click.echo(f"🔎 Searching Notion for: {', '.join(selected_tags)}...")
+    
+    # Build the Notion Filter
+    if len(selected_tags) == 1:
+        db_filter = {"property": "Tags", "multi_select": {"contains": selected_tags[0]}}
+    else:
+        db_filter = {
+            "and": [{"property": "Tags", "multi_select": {"contains": t}} for t in selected_tags]
+        }
+
+    try:
+        results = notion.databases.query(database_id=db["id"], filter=db_filter)
+        pages = results.get("results", [])[:len(KEYS_EXPANDED)]
+        
+        if not pages:
+            click.echo("\nNo pages found with those exact tags.")
+            return
+
+        click.echo(f"\nFound {len(pages)} result(s):")
+        page = pick_from_list(
+            pages,
+            label_fn=lambda p: get_page_title(p),
+            key_list=KEYS,
+            url_fn=lambda p: p.get("url"),
+            prompt="Select a page to read, or any other key to go back: "
+        )
+        if page:
+            read_page(page["id"])
+
+    except Exception as e:
+        click.echo(f"❌ Notion Query Error: {e}") 
+# ── Command menu ───────────────────────────────────────────────────────────────
+
+# CHQ: Gemini AI generated function
+def action_search_multi_tags(db):
+    # 0. Load the local tag category file
+    try:
+        file_path = os.path.join(os.path.dirname(__file__), "database_metadata/", "tag_categories.json")
+        with open(file_path, 'r') as f:
+            tag_hierarchy = json.load(f)
+    except Exception as e:
+        click.echo(f"❌ Could not load tag_categories.json: {e}")
+        return
+
+    # This list will hold ALL tags selected across different subcategories
+    final_tag_basket = set()
+
+    while True:
+        # Show what is currently in the "basket"
+        if final_tag_basket:
+            click.echo(f"\n🛒 Current Selection Basket: {', '.join(final_tag_basket)}")
+            
+            # Offer the "Third Option" to Search Now or Add More
+            options = [
+                {"label": "Search Notion with these tags", "action": "search"},
+                {"label": "Add more tags from another category", "action": "continue"},
+                {"label": "Clear all and start over", "action": "clear"},
+                {"label": "Cancel and go back", "action": "cancel"}
+            ]
+            
+            click.echo("\n--- What would you like to do? ---")
+            choice = pick_from_list(options, label_fn=lambda o: o["label"], key_list="1234")
+            
+            if not choice or choice["action"] == "cancel": return
+            if choice["action"] == "clear": 
+                final_tag_basket.clear()
+                continue
+            if choice["action"] == "search":
+                break # Exit the loop to perform the search below
+        
+        # 1. Select Category
+        categories = list(tag_hierarchy.keys())
+        click.echo("\n📂 Select a Category:")
+        selected_cat = pick_from_list(categories, label_fn=lambda c: c, key_list=KEYS_EXPANDED)
+        if not selected_cat: break
+
+        # 2. Select Subcategory
+        subs_dict = tag_hierarchy.get(selected_cat, {})
+        subcategories = list(subs_dict.keys())
+        click.echo(f"\n📁 {selected_cat} > Select Subcategory:")
+        selected_sub = pick_from_list(subcategories, label_fn=lambda s: s, key_list=KEYS_EXPANDED)
+        if not selected_sub: continue
+
+        # 3. Select Multiple Tags
+        tags_list = subs_dict[selected_sub]
+        click.echo(f"\n🏷️  {selected_cat} > {selected_sub} > Toggle Tags:")
+        new_selections = pick_multi_from_list(
+            tags_list,
+            label_fn=lambda t: t,
+            list_size=KEYS_EXPANDED
+        )
+
+        # Add the new selections to our permanent basket
+        if new_selections:
+            final_tag_basket.update(new_selections)
+
+    # 4. PERFORM THE ACTUAL NOTION SEARCH (using the final basket)
+    if not final_tag_basket:
+        click.echo("No tags selected.")
+        return
+
+    selected_tags_list = list(final_tag_basket)
+    click.echo(f"\n🔎 Searching Notion for pages containing ALL: {', '.join(selected_tags_list)}...")
+    
+    if len(selected_tags_list) == 1:
+        db_filter = {"property": "Tags", "multi_select": {"contains": selected_tags_list[0]}}
+    else:
+        db_filter = {
+            "and": [{"property": "Tags", "multi_select": {"contains": t}} for t in selected_tags_list]
+        }
+
+    try:
+        results = notion.databases.query(database_id=db["id"], filter=db_filter)
+        pages = results.get("results", [])[:len(KEYS_EXPANDED)]
+        
+        if not pages:
+            click.echo("\nNo pages found with those exact tags.")
+            return
+
+        click.echo(f"\nFound {len(pages)} result(s):")
+        page = pick_from_list(
+            pages,
+            label_fn=lambda p: get_page_title(p),
+            key_list=KEYS_EXPANDED,
+            url_fn=lambda p: p.get("url"),
+            prompt="Select a page to read, or any other key to go back: "
+        )
+        if page:
+            read_page(page["id"])
+
+    except Exception as e:
+        click.echo(f"❌ Notion Query Error: {e}")
+
 def action_read(db):
     page_id = click.prompt("\n📄 Enter page ID")
     try:
@@ -428,9 +617,6 @@ def action_append(db):
         click.echo(f"\n✅ Appended text to page {page_id}\n")
     except Exception as e:
         click.echo(f"❌ Error: {e}")
-
-
-# ── Command menu ───────────────────────────────────────────────────────────────
 
 COMMANDS = [
     {"label": "Search pages",      "fn": action_search},

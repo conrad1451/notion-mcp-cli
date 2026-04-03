@@ -29,6 +29,7 @@ def load_databases():
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
+KEYS_FEW = "123456789"
 KEYS = "123456789abcdefghijklmnopqrstuvwxyz"
 KEYS_EXPANDED = "123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 
@@ -37,13 +38,13 @@ def hyperlink(text, url):
     return f"\033]8;;{url}\033\\{text}\033]8;;\033\\"
 
 
-def pick_from_list(items, label_fn, url_fn=None, prompt="Press a key to select, or any other key to quit: "):
+def pick_from_list(items, label_fn, key_list=KEYS_FEW, url_fn=None, prompt="Press a key to select, or any other key to quit: "):
     """Display a keyed list and return the selected item, or None."""
     key_to_item = {}
     for i, item in enumerate(items):
-        if i >= len(KEYS_EXPANDED):
+        if i >= len(key_list):
             break
-        key = KEYS_EXPANDED[i]
+        key = key_list[i]
         key_to_item[key] = item
         label = label_fn(item)
         if url_fn:
@@ -57,16 +58,16 @@ def pick_from_list(items, label_fn, url_fn=None, prompt="Press a key to select, 
     click.echo(key)
     return key_to_item.get(key)
 
-def pick_multi_from_list(items, label_fn, url_fn=None, prompt="Space to toggle, Enter to confirm: "):
+def pick_multi_from_list(items, label_fn, list_size=KEYS_FEW, url_fn=None, prompt="Space to toggle, Enter to confirm: "):
     """Display a keyed list, allow multiple selections, return list of selected items."""
     key_to_item = {}
     key_to_index = {}
     selected_keys = set()
 
     for i, item in enumerate(items):
-        if i >= len(KEYS_EXPANDED):
+        if i >= len(list_size):
             break
-        key = KEYS_EXPANDED[i]
+        key = list_size[i]
         key_to_item[key] = item
         key_to_index[key] = i
 
@@ -82,7 +83,7 @@ def pick_multi_from_list(items, label_fn, url_fn=None, prompt="Space to toggle, 
             marker = "✓" if key in selected_keys else " "
             click.echo(f"  [{key}] {marker} {label}")
         click.echo()
-        selected_labels = [label_fn(key_to_item[k]) for k in KEYS_EXPANDED if k in selected_keys]
+        selected_labels = [label_fn(key_to_item[k]) for k in list_size if k in selected_keys]
         click.echo(f"  Selected: {', '.join(selected_labels) if selected_labels else 'none'}")
         click.echo()
         click.echo(prompt, nl=False)
@@ -94,7 +95,7 @@ def pick_multi_from_list(items, label_fn, url_fn=None, prompt="Space to toggle, 
 
         if key in ("\r", "\n"):
             click.echo()
-            return [key_to_item[k] for k in KEYS_EXPANDED if k in selected_keys]
+            return [key_to_item[k] for k in list_size if k in selected_keys]
 
         if key in (" ", "\x20"):
             # Find which item to toggle based on last non-space key — skip
@@ -189,6 +190,7 @@ def action_search(db):
     field = pick_from_list(
         SEARCH_FIELDS,
         label_fn=lambda f: f["label"],
+        key_list=KEYS,
         prompt="Pick a field: "
     )
     if field is None:
@@ -236,6 +238,7 @@ def action_search(db):
     page = pick_from_list(
         pages,
         label_fn=lambda p: get_page_title(p),
+        key_list=KEYS,
         url_fn=lambda p: p.get("url"),
         prompt="Press a key to open a page, or any other key to go back: "
     )
@@ -307,6 +310,7 @@ def action_search_multi_tags(db):
     page = pick_from_list(
         pages,
         label_fn=lambda p: get_page_title(p),
+        key_list=KEYS,
         url_fn=lambda p: p.get("url"),
         prompt="Press a key to open a page, or any other key to go back: "
     )
@@ -392,6 +396,7 @@ def command_menu(db):
         cmd = pick_from_list(
             COMMANDS,
             label_fn=lambda c: c["label"],
+            key_list=KEYS,
             prompt="Choose an action: "
         )
 
@@ -423,6 +428,7 @@ def cli():
         db = pick_from_list(
             databases,
             label_fn=lambda d: d["name"],
+            key_list=KEYS,
             prompt="Press a key to select: "
         )
         if db is None:

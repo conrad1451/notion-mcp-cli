@@ -29,6 +29,7 @@ def load_databases():
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
+KEYS_FEW = "123456789"
 KEYS = "123456789abcdefghijklmnopqrstuvwxyz"
 KEYS_EXPANDED = "123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 
@@ -37,13 +38,13 @@ def hyperlink(text, url):
     return f"\033]8;;{url}\033\\{text}\033]8;;\033\\"
 
 
-def pick_from_list(items, label_fn, url_fn=None, prompt="Press a key to select, or any other key to quit: "):
+def pick_from_list(items, label_fn, key_list=KEYS_FEW, url_fn=None, prompt="Press a key to select, or any other key to quit: "):
     """Display a keyed list and return the selected item, or None."""
     key_to_item = {}
     for i, item in enumerate(items):
-        if i >= len(KEYS_EXPANDED):
+        if i >= len(key_list):
             break
-        key = KEYS_EXPANDED[i]
+        key = key_list[i]
         key_to_item[key] = item
         label = label_fn(item)
         if url_fn:
@@ -56,6 +57,62 @@ def pick_from_list(items, label_fn, url_fn=None, prompt="Press a key to select, 
     key = readchar.readkey()
     click.echo(key)
     return key_to_item.get(key)
+
+def pick_multi_from_list(items, label_fn, list_size=KEYS_FEW, url_fn=None, prompt="Space to toggle, Enter to confirm: "):
+    """Display a keyed list, allow multiple selections, return list of selected items."""
+    key_to_item = {}
+    key_to_index = {}
+    selected_keys = set()
+
+    for i, item in enumerate(items):
+        if i >= len(list_size):
+            break
+        key = list_size[i]
+        key_to_item[key] = item
+        key_to_index[key] = i
+
+    def render():
+        # Clear previously printed lines
+        click.echo("\033[2J\033[H", nl=False)  # clear screen
+        for i, (key, item) in enumerate(key_to_item.items()):
+            label = label_fn(item)
+            if url_fn:
+                url = url_fn(item)
+                if url:
+                    label = hyperlink(label, url)
+            marker = "✓" if key in selected_keys else " "
+            click.echo(f"  [{key}] {marker} {label}")
+        click.echo()
+        selected_labels = [label_fn(key_to_item[k]) for k in list_size if k in selected_keys]
+        click.echo(f"  Selected: {', '.join(selected_labels) if selected_labels else 'none'}")
+        click.echo()
+        click.echo(prompt, nl=False)
+
+    render()
+
+    while True:
+        key = readchar.readkey()
+
+        if key in ("\r", "\n"):
+            click.echo()
+            return [key_to_item[k] for k in list_size if k in selected_keys]
+
+        if key in (" ", "\x20"):
+            # Find which item to toggle based on last non-space key — skip
+            # Space alone isn't a key, so we re-render and wait
+            render()
+            continue
+
+        if key in key_to_item:
+            if key in selected_keys:
+                selected_keys.discard(key)
+            else:
+                selected_keys.add(key)
+            render()
+        else:
+            # Any other key — treat as cancel
+            click.echo()
+            return []
 
 def extract_plain_text(rich_text_list):
     return "".join(block.get("plain_text", "") for block in rich_text_list)
@@ -133,6 +190,7 @@ def action_search(db):
     field = pick_from_list(
         SEARCH_FIELDS,
         label_fn=lambda f: f["label"],
+        key_list=KEYS,
         prompt="Pick a field: "
     )
     if field is None:
@@ -180,6 +238,79 @@ def action_search(db):
     page = pick_from_list(
         pages,
         label_fn=lambda p: get_page_title(p),
+        key_list=KEYS,
+        url_fn=lambda p: p.get("url"),
+        prompt="Press a key to open a page, or any other key to go back: "
+    )
+    if page:
+        read_page(page["id"])
+    else:
+        click.echo("No page selected.")
+
+# CHQ: Claude AI created this function
+def action_search_multi_tags(db):
+    # Step 1: fetch all unique tags from the database
+    click.echo("\n⏳ Loading tags...")
+    try:
+        result = notion.databases.retrieve(database_id=db["id"])
+        tag_options = result["properties"]["Tags"]["multi_select"]["options"]
+    except Exception as e:
+        click.echo(f"❌ Could not load tags: {e}")
+        return
+
+    if not tag_options:
+        click.echo("No tags found in this database.")
+        return
+
+    # Step 2: pick multiple tags
+    click.echo("\n🏷️  Select tags to filter by:\n")
+    selected_tags = pick_multi_from_list(
+        tag_options,
+        label_fn=lambda t: t["name"],
+    )
+
+    if not selected_tags:
+        click.echo("No tags selected.")
+        return
+
+    # Step 3: build AND filter across all selected tags
+    if len(selected_tags) == 1:
+        db_filter = {
+            "property": "Tags",
+            "multi_select": {"contains": selected_tags[0]["name"]}
+        }
+    else:
+        # CHQ: Claude does some clever coding to "AND" all
+        #      of the selected_tags
+        db_filter = {
+            "and": [
+                {"property": "Tags", "multi_select": {"contains": t["name"]}}
+                for t in selected_tags
+            ]
+        }
+
+    # Step 4: query
+    try:
+        results = notion.databases.query(
+            database_id=db["id"],
+            filter=db_filter
+        )
+    except Exception as e:
+        click.echo(f"❌ Error querying database: {e}")
+        return
+
+    pages = results.get("results", [])[:len(KEYS_EXPANDED)]
+    tag_names = ", ".join(t["name"] for t in selected_tags)
+
+    if not pages:
+        click.echo(f"\nNo pages found with tags: {tag_names}")
+        return
+
+    click.echo(f"\nFound {len(pages)} result(s) tagged [{tag_names}]:\n")
+    page = pick_from_list(
+        pages,
+        label_fn=lambda p: get_page_title(p),
+        key_list=KEYS,
         url_fn=lambda p: p.get("url"),
         prompt="Press a key to open a page, or any other key to go back: "
     )
@@ -248,6 +379,7 @@ def action_append(db):
 
 COMMANDS = [
     {"label": "Search pages",      "fn": action_search},
+    {"label": "Search by multiple tags","fn": action_search_multi_tags}, # CHQ: Claude AI added
     {"label": "Read page by ID",   "fn": action_read},
     {"label": "Create page",       "fn": action_create},
     {"label": "Append to page",    "fn": action_append},
@@ -264,6 +396,7 @@ def command_menu(db):
         cmd = pick_from_list(
             COMMANDS,
             label_fn=lambda c: c["label"],
+            key_list=KEYS,
             prompt="Choose an action: "
         )
 
@@ -295,6 +428,7 @@ def cli():
         db = pick_from_list(
             databases,
             label_fn=lambda d: d["name"],
+            key_list=KEYS,
             prompt="Press a key to select: "
         )
         if db is None:

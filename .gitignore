@@ -2,4 +2,6 @@ venv/
 .env
 __pycache__/
 *.pyc
-databases.json
+databases.json 
+database_metadata/
+listoftagnames.txt

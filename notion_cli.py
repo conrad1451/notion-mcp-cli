@@ -465,7 +465,7 @@ def action_search_multi_tags_gemini_v1(db):
 # ── Command menu ───────────────────────────────────────────────────────────────
 
 # CHQ: Gemini AI generated function
-def action_search_multi_tags(db):
+def action_search_multi_tags_not_recursive(db):
     # 0. Load the local tag category file
     try:
         file_path = os.path.join(os.path.dirname(__file__), "database_metadata/", "tag_categories.json")
@@ -548,6 +548,124 @@ def action_search_multi_tags(db):
     selected_tags_list = list(final_tag_basket)
     click.echo(f"\n🔎 Searching Notion for pages containing ALL: {', '.join(selected_tags_list)}...")
     
+    if len(selected_tags_list) == 1:
+        db_filter = {"property": "Tags", "multi_select": {"contains": selected_tags_list[0]}}
+    else:
+        db_filter = {
+            "and": [{"property": "Tags", "multi_select": {"contains": t}} for t in selected_tags_list]
+        }
+
+    try:
+        results = notion.databases.query(database_id=db["id"], filter=db_filter)
+        pages = results.get("results", [])[:len(KEYS_EXPANDED)]
+        
+        if not pages:
+            click.echo("\nNo pages found with those exact tags.")
+            return
+
+        click.echo(f"\nFound {len(pages)} result(s):")
+        page = pick_from_list(
+            pages,
+            label_fn=lambda p: get_page_title(p),
+            key_list=KEYS_EXPANDED,
+            url_fn=lambda p: p.get("url"),
+            prompt="Select a page to read, or any other key to go back: "
+        )
+        if page:
+            read_page(page["id"])
+
+    except Exception as e:
+        click.echo(f"❌ Notion Query Error: {e}")
+
+# CHQ: Gemini AI made this to target folders at any depth
+def action_search_multi_tags(db):
+    # 0. Load the local tag category file
+    try:
+        file_path = os.path.join(os.path.dirname(__file__), "database_metadata/", "tag_categories.json")
+        with open(file_path, 'r') as f:
+            tag_hierarchy = json.load(f)
+    except Exception as e:
+        click.echo(f"❌ Could not load tag_categories.json: {e}")
+        return
+
+    final_tag_basket = set()
+
+    while True:
+        if final_tag_basket:
+            click.echo(f"\n🛒 Current Selection Basket: {', '.join(final_tag_basket)}")
+            options = [
+                {"label": "Search Notion with these tags", "action": "search"},
+                {"label": "Add more tags from another category", "action": "continue"},
+                {"label": "Clear all and start over", "action": "clear"},
+                {"label": "Cancel and go back", "action": "cancel"}
+            ]
+            click.echo("\n--- What would you like to do? ---")
+            choice = pick_from_list(options, label_fn=lambda o: o["label"], key_list="1234")
+            
+            if not choice or choice["action"] == "cancel": return
+            if choice["action"] == "clear": 
+                final_tag_basket.clear()
+                continue
+            if choice["action"] == "search":
+                break 
+
+        # 1. Start at the top of the hierarchy
+        current_level_data = tag_hierarchy
+        current_path = []
+
+        # 2. RECURSIVE DIVE LOOP
+        # Keep asking the user to pick a sub-folder as long as the data is a dictionary
+        while isinstance(current_level_data, dict):
+            options = list(current_level_data.keys())
+            
+            # Show the user where they are in the folder structure
+            path_str = " > ".join(current_path) if current_path else "Root"
+            click.echo(f"\n📂 Location: {path_str}")
+            
+            selected_key = pick_from_list(
+                options, 
+                label_fn=lambda x: x, 
+                key_list=KEYS_EXPANDED,
+                prompt="Select a category/folder (or any other key to go back): "
+            )
+            
+            if not selected_key:
+                # This breaks the "dive" and goes back to the main basket menu
+                current_level_data = None
+                break
+            
+            # Move deeper into the dictionary
+            current_path.append(selected_key)
+            current_level_data = current_level_data[selected_key]
+
+        # If the user backed out, restart the main loop
+        if current_level_data is None:
+            continue
+
+        # 3. SELECT TAGS
+        # At this point, current_level_data MUST be a list
+        if isinstance(current_level_data, list):
+            new_selections = pick_multi_from_list(
+                current_level_data,
+                label_fn=lambda t: t,
+                list_size=KEYS_EXPANDED,
+                prompt="Space to toggle, Enter to confirm selection: "
+            )
+
+            if new_selections:
+                final_tag_basket.update(new_selections)
+        else:
+            click.echo("⚠️ Expected a list of tags but found something else.")
+
+    # 4. PERFORM THE ACTUAL NOTION SEARCH
+    if not final_tag_basket:
+        click.echo("No tags selected.")
+        return
+
+    selected_tags_list = list(final_tag_basket)
+    click.echo(f"\n🔎 Searching Notion for: {', '.join(selected_tags_list)}...")
+    
+    # Build the Notion Filter (AND logic)
     if len(selected_tags_list) == 1:
         db_filter = {"property": "Tags", "multi_select": {"contains": selected_tags_list[0]}}
     else:

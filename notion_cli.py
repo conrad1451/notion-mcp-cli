@@ -233,18 +233,33 @@ def show_db_properties(db):
 
 # CHQ: Claude AI updated to allow searching by specific properties
 def action_search(db):
-    # Step 1: pick search field
-    SEARCH_FIELDS = [
-        {"label": "Name (title)", "type": "title"},
-        {"label": "Tags",         "type": "multi_select"},
-        {"label": "Area",         "type": "select"},
-        {"label": "Type",         "type": "select"},
-    ]
+    # Step 1: fetch real properties from Notion
+    click.echo("\n⏳ Loading database properties...")
+    try:
+        result = notion.databases.retrieve(database_id=db["id"])
+        props = result.get("properties", {})
+    except Exception as e:
+        click.echo(f"❌ Could not load properties: {e}")
+        return
 
+    # Only include searchable property types
+    SEARCHABLE_TYPES = {"title", "multi_select", "select", "rich_text", "number", "email", "phone_number", "url"}
+
+    search_fields = []
+    for name, prop in props.items():
+        ptype = prop.get("type")
+        if ptype in SEARCHABLE_TYPES:
+            search_fields.append({"label": name, "type": ptype})
+
+    if not search_fields:
+        click.echo("No searchable properties found.")
+        return
+
+    # Step 2: pick search field
     click.echo("\n🔎 Search by:\n")
     field = pick_from_list(
-        SEARCH_FIELDS,
-        label_fn=lambda f: f["label"],
+        search_fields,
+        label_fn=lambda f: f"{f['label']} ({f['type']})",
         key_list=KEYS,
         prompt="Pick a field: "
     )
@@ -252,33 +267,35 @@ def action_search(db):
         click.echo("No field selected.")
         return
 
-    query = click.prompt(f"\n  Enter {field['label']} to search for")
+    query = click.prompt(f"\n  Enter value to search for in \"{field['label']}\"")
 
-    # Step 2: build filter based on field type
-    notion_field = field["label"] if field["label"] != "Name (title)" else "Name"
+    # Step 3: build filter based on field type
+    ptype = field["type"]
+    prop_name = field["label"]
 
-    if field["type"] == "title":
-        db_filter = {
-            "property": notion_field,
-            "title": {"contains": query}
-        }
-    elif field["type"] == "multi_select":
-        db_filter = {
-            "property": notion_field,
-            "multi_select": {"contains": query}
-        }
-    elif field["type"] == "select":
-        db_filter = {
-            "property": notion_field,
-            "select": {"equals": query}
-        }
+    if ptype == "title":
+        db_filter = {"property": prop_name, "title": {"contains": query}}
+    elif ptype == "rich_text":
+        db_filter = {"property": prop_name, "rich_text": {"contains": query}}
+    elif ptype == "multi_select":
+        db_filter = {"property": prop_name, "multi_select": {"contains": query}}
+    elif ptype == "select":
+        db_filter = {"property": prop_name, "select": {"equals": query}}
+    elif ptype == "number":
+        try:
+            db_filter = {"property": prop_name, "number": {"equals": float(query)}}
+        except ValueError:
+            click.echo("❌ Invalid number.")
+            return
+    elif ptype in ("email", "phone_number", "url"):
+        db_filter = {"property": prop_name, ptype: {"contains": query}}
+    else:
+        click.echo(f"⚠️ Unsupported filter type: {ptype}")
+        return
 
-    # Step 3: query the database
+    # Step 4: query the database
     try:
-        results = notion.databases.query(
-            database_id=db["id"],
-            filter=db_filter
-        )
+        results = notion.databases.query(database_id=db["id"], filter=db_filter)
     except Exception as e:
         click.echo(f"❌ Error querying database: {e}")
         return
@@ -286,14 +303,14 @@ def action_search(db):
     pages = results.get("results", [])[:len(KEYS_EXPANDED)]
 
     if not pages:
-        click.echo(f"\nNo pages found where {field['label']} contains \"{query}\".")
+        click.echo(f"\nNo pages found where \"{field['label']}\" contains \"{query}\".")
         return
 
     click.echo(f"\nFound {len(pages)} result(s):\n")
     page = pick_from_list(
         pages,
         label_fn=lambda p: get_page_title(p),
-        key_list=KEYS,
+        key_list=KEYS_EXPANDED,
         url_fn=lambda p: p.get("url"),
         prompt="Press a key to open a page, or any other key to go back: "
     )
@@ -302,7 +319,8 @@ def action_search(db):
     else:
         click.echo("No page selected.")
 
-# CHQ: Claude AI created this function
+# CHQ: Claude AI modified to dynamically get properties 
+#      to use for selection in search pages
 def action_search_multi_tags_old(db):
     # Step 1: fetch all unique tags from the database
     click.echo("\n⏳ Loading tags...")

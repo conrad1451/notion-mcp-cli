@@ -324,7 +324,11 @@ def action_search(db):
 def action_search_multi_tags_not_recursive(db):
     # 0. Load the local tag category file
     try:
-        file_path = os.path.join(os.path.dirname(__file__), "database_metadata/", "tag_categories.json")
+        tag_file = db.get("tag_file")
+        if not tag_file:
+            click.echo("❌ No tag file configured for this database.")
+            return
+        file_path = os.path.join(os.path.dirname(__file__), tag_file)
         with open(file_path, 'r') as f:
             tag_hierarchy = json.load(f)
     except Exception as e:
@@ -437,7 +441,12 @@ def action_search_multi_tags_not_recursive(db):
 def action_search_multi_tags(db):
     # 0. Load the local tag category file
     try:
-        file_path = os.path.join(os.path.dirname(__file__), "database_metadata/", "tag_categories.json")
+        tag_file = db.get("tag_file")
+        if not tag_file:
+            click.echo("❌ No tag file configured for this database.")
+            return
+        file_path = os.path.join(os.path.dirname(__file__), tag_file)
+        
         with open(file_path, 'r') as f:
             tag_hierarchy = json.load(f)
     except Exception as e:

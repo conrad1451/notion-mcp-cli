@@ -64,7 +64,7 @@ def pick_from_list(items, label_fn, key_list=KEYS_FEW, url_fn=None, prompt="Pres
     return key_to_item.get(key)
 
 # CHQ: Gemini AI refactored
-def pick_multi_from_list(items, label_fn, list_size=KEYS_FEW, url_fn=None, prompt="Space to toggle, Enter to confirm: "):
+def pick_multi_from_list(items, label_fn, list_size=KEYS_FEW, url_fn=None, prompt="Press item keys to toggle, Enter to confirm: "):
     key_to_item = {}
     selected_keys = set()
 
@@ -158,11 +158,58 @@ def blocks_to_text(blocks):
             lines.append(text)
     return "\n".join(lines)
 
+# CHQ: ChatGPT created function
+def format_property_value(prop_data):
+    type_name = prop_data.get("type")
+
+    if type_name == "rich_text":
+        return extract_plain_text(prop_data.get("rich_text", []))
+    elif type_name == "title":
+        return extract_plain_text(prop_data.get("title", []))
+    elif type_name == "multi_select":
+        return ", ".join(i.get("name", "") for i in prop_data.get("multi_select", []))
+    elif type_name == "select":
+        return (prop_data.get("select") or {}).get("name")
+    elif type_name == "url":
+        return prop_data.get("url")
+    elif type_name == "number":
+        return prop_data.get("number")
+    elif type_name == "checkbox":
+        return prop_data.get("checkbox")
+    elif type_name == "date":
+        return prop_data.get("date")
+    elif type_name == "email":
+        return prop_data.get("email")
+    elif type_name == "phone_number":
+        return prop_data.get("phone_number")
+    else:
+        return str(prop_data.get(type_name))
+
+def print_page_properties(page_id, prop_list):
+    # source: ChatGPT (via Bing)
+    if not prop_list:
+        click.echo("No properties found for this page.")
+        return
+
+    click.echo(f"Properties for page {page_id}:")
+    for prop_name, prop_data in prop_list.items():
+        click.echo(f"- {prop_name} ({prop_data.get('type', 'unknown')}):")
+        click.echo(f" {format_property_value(prop_data)}")
+        click.echo()
 
 def read_page(page_id):
     page = notion.pages.retrieve(page_id=page_id)
     title = get_page_title(page)
     click.echo(f"\n📄 {title}")
+    click.echo("─" * 50)
+
+    click.echo("Page details: ")
+
+    properties = page.get("properties", {})
+    print_page_properties(page_id, properties)
+
+    # click.echo("Page details: ")
+
     click.echo("─" * 50)
     blocks = notion.blocks.children.list(block_id=page_id)
     content = blocks_to_text(blocks.get("results", []))
@@ -346,7 +393,7 @@ def action_search_multi_tags(db):
                 current_level_data,
                 label_fn=lambda t: t,
                 list_size=KEYS_EXPANDED,
-                prompt="Space to toggle, Enter to confirm selection: "
+                prompt="Press item keys to toggle, Enter to confirm: "
             )
 
             if new_selections:

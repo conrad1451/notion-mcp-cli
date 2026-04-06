@@ -185,6 +185,24 @@ def format_property_value(prop_data):
     else:
         return str(prop_data.get(type_name))
 
+# CHQ: ChatGPT created function
+def get_title_property_name2(database_id):
+    result = notion.databases.retrieve(database_id=database_id)
+    props = result.get("properties", {})
+    for name, prop in props.items():
+        if prop.get("type") == "title":
+            return name
+    raise ValueError("No title property found")
+
+
+def get_title_property_name(database_id):
+    result = notion.databases.retrieve(database_id=database_id)
+    props = result.get("properties", {})
+    for name, prop in props.items():
+        if prop.get("type") == "title":
+            return name
+    raise ValueError("No title property found")
+
 def print_page_properties(page_id, prop_list):
     # source: ChatGPT (via Bing)
     if not prop_list:
@@ -451,6 +469,11 @@ def action_create(db):
     title = click.prompt("\n✏️  Page title")
     body = click.prompt("Body text (optional, press Enter to skip)", default="")
     children = []
+    
+    # CHQ: ChatGPT made function to dynamically Find
+    #      name of title property 
+    title_prop = get_title_property_name(db["id"])
+
     if body:
         children.append({
             "object": "block",
@@ -462,10 +485,9 @@ def action_create(db):
     try:
         page = notion.pages.create(
             parent={"type": "database_id", "database_id": db["id"]},
-            properties={
-                "title": {
-                    "title": [{"type": "text", "text": {"content": title}}]
-                }
+             
+            properties={ title_prop: {
+                    "title": [{"type": "text", "text": {"content": title}}] }
             },
             children=children
         )

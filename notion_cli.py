@@ -76,7 +76,7 @@ def pick_from_list(
 def pick_multi_from_list(
     items,
     label_fn,
-    list_size=KEYS_FEW,
+    key_list=KEYS_FEW,
     url_fn=None,
     prompt="Press item keys to toggle, Enter to confirm: ",
 ):
@@ -84,9 +84,9 @@ def pick_multi_from_list(
     selected_keys = set()
 
     for i, item in enumerate(items):
-        if i >= len(list_size):
+        if i >= len(key_list):
             break
-        key = list_size[i]
+        key = key_list[i]
         key_to_item[key] = item
 
     def render():
@@ -99,7 +99,7 @@ def pick_multi_from_list(
 
         click.echo()
         selected_labels = [
-            label_fn(key_to_item[k]) for k in list_size if k in selected_keys
+            label_fn(key_to_item[k]) for k in key_list if k in selected_keys
         ]
         click.echo(
             f"  Selected: {', '.join(selected_labels) if selected_labels else 'none'}"
@@ -115,7 +115,7 @@ def pick_multi_from_list(
         # Handle Enter (Confirm)
         if key in (readchar.key.ENTER, "\r", "\n"):
             click.echo()
-            return [key_to_item[k] for k in list_size if k in selected_keys]
+            return [key_to_item[k] for k in key_list if k in selected_keys]
 
         # Handle Space (Toggle)
         elif key in (readchar.key.SPACE, " ", "\x20"):
@@ -471,7 +471,7 @@ def action_search_multi_tags(db):
             selected_tags_from_list = pick_multi_from_list(
                 current_level_data,
                 label_fn=lambda t: t,
-                list_size=KEYS_EXPANDED,
+                key_list=KEYS_EXPANDED,
                 prompt="Press item keys to toggle, Enter to confirm: ",
             )
 

@@ -11,7 +11,12 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-notion = Client(auth=os.environ["NOTION_TOKEN"])
+token = os.getenv("NOTION_TOKEN")
+if not token:
+    click.echo("❌ NOTION_TOKEN is not set.")
+    raise SystemExit(1)
+
+notion = Client(auth=token)
 
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), "databases.json")
 
@@ -57,62 +62,6 @@ def pick_from_list(items, label_fn, key_list=KEYS_FEW, url_fn=None, prompt="Pres
     key = readchar.readkey()
     click.echo(key)
     return key_to_item.get(key)
-
-def pick_multi_from_list_old(items, label_fn, list_size=KEYS_FEW, url_fn=None, prompt="Space to toggle, Enter to confirm: "):
-    """Display a keyed list, allow multiple selections, return list of selected items."""
-    key_to_item = {}
-    key_to_index = {}
-    selected_keys = set()
-
-    for i, item in enumerate(items):
-        if i >= len(list_size):
-            break
-        key = list_size[i]
-        key_to_item[key] = item
-        key_to_index[key] = i
-
-    def render():
-        # Clear previously printed lines
-        click.echo("\033[2J\033[H", nl=False)  # clear screen
-        for i, (key, item) in enumerate(key_to_item.items()):
-            label = label_fn(item)
-            if url_fn:
-                url = url_fn(item)
-                if url:
-                    label = hyperlink(label, url)
-            marker = "✓" if key in selected_keys else " "
-            click.echo(f"  [{key}] {marker} {label}")
-        click.echo()
-        selected_labels = [label_fn(key_to_item[k]) for k in list_size if k in selected_keys]
-        click.echo(f"  Selected: {', '.join(selected_labels) if selected_labels else 'none'}")
-        click.echo()
-        click.echo(prompt, nl=False)
-
-    render()
-
-    while True:
-        key = readchar.readkey()
-
-        if key in ("\r", "\n"):
-            click.echo()
-            return [key_to_item[k] for k in list_size if k in selected_keys]
-
-        if key in (" ", "\x20"):
-            # Find which item to toggle based on last non-space key — skip
-            # Space alone isn't a key, so we re-render and wait
-            render()
-            continue
-
-        if key in key_to_item:
-            if key in selected_keys:
-                selected_keys.discard(key)
-            else:
-                selected_keys.add(key)
-            render()
-        else:
-            # Any other key — treat as cancel
-            click.echo()
-            return []
 
 # CHQ: Gemini AI refactored
 def pick_multi_from_list(items, label_fn, list_size=KEYS_FEW, url_fn=None, prompt="Space to toggle, Enter to confirm: "):
@@ -319,123 +268,6 @@ def action_search(db):
     else:
         click.echo("No page selected.")
 # ── Command menu ───────────────────────────────────────────────────────────────
-
-# CHQ: Gemini AI generated function
-def action_search_multi_tags_not_recursive(db):
-    # 0. Load the local tag category file
-    try:
-        tag_file = db.get("tag_file")
-        if not tag_file:
-            click.echo("❌ No tag file configured for this database.")
-            return
-        file_path = os.path.join(os.path.dirname(__file__), tag_file)
-        with open(file_path, 'r') as f:
-            tag_hierarchy = json.load(f)
-    except Exception as e:
-        click.echo(f"❌ Could not load tag_categories.json: {e}")
-        return
-
-    # This list will hold ALL tags selected across different subcategories
-    final_tag_basket = set()
-
-    while True:
-        # Show what is currently in the "basket"
-        if final_tag_basket:
-            click.echo(f"\n🛒 Current Selection Basket: {', '.join(final_tag_basket)}")
-            
-            # Offer the "Third Option" to Search Now or Add More
-            options = [
-                {"label": "Search Notion with these tags", "action": "search"},
-                {"label": "Add more tags from another category", "action": "continue"},
-                {"label": "Clear all and start over", "action": "clear"},
-                {"label": "Cancel and go back", "action": "cancel"}
-            ]
-            
-            click.echo("\n--- What would you like to do? ---")
-            choice = pick_from_list(options, label_fn=lambda o: o["label"], key_list="1234")
-            
-            if not choice or choice["action"] == "cancel": return
-            if choice["action"] == "clear": 
-                final_tag_basket.clear()
-                continue
-            if choice["action"] == "search":
-                break # Exit the loop to perform the search below
-        
-        # 1. Select Category
-        categories = list(tag_hierarchy.keys())
-        click.echo("\n📂 Select a Category:")
-        selected_cat = pick_from_list(categories, label_fn=lambda c: c, key_list=KEYS_EXPANDED)
-        if not selected_cat: break
-
-        # 2. Select Subcategory
-        subs_dict = tag_hierarchy.get(selected_cat, {})
-        subcategories = list(subs_dict.keys())
-        selected_sub = pick_from_list(subcategories, label_fn=lambda s: s, key_list=KEYS_EXPANDED)
-        if not selected_sub: continue
-
-        # CHQ: Gemini AI refactored
-        # 3. DETECTION LOGIC: Object vs List
-        target_data = subs_dict[selected_sub]
-
-        if isinstance(target_data, dict):
-            # It's an object (e.g., "Programming Fundamentals" contains "software paradigms")
-            # We need one more level of nesting
-            leaf_options = list(target_data.keys())
-            click.echo(f"\n📂 {selected_sub} > Select Type:")
-            selected_leaf = pick_from_list(leaf_options, label_fn=lambda l: l, key_list=KEYS_EXPANDED)
-            if not selected_leaf: continue
-            tags_list = target_data[selected_leaf]
-        else:
-            # It's already a list (e.g., "Languages & Runtimes" is [ "Python", "Go", ... ])
-            tags_list = target_data
-
-        # 4. Select Multiple Tags (Now it will always be the list of strings)
-        new_selections = pick_multi_from_list(
-            tags_list,
-            label_fn=lambda t: t,
-            list_size=KEYS_EXPANDED
-        )
-
-        # Add the new selections to our permanent basket
-        if new_selections:
-            final_tag_basket.update(new_selections)
-
-    # 4. PERFORM THE ACTUAL NOTION SEARCH (using the final basket)
-    if not final_tag_basket:
-        click.echo("No tags selected.")
-        return
-
-    selected_tags_list = list(final_tag_basket)
-    click.echo(f"\n🔎 Searching Notion for pages containing ALL: {', '.join(selected_tags_list)}...")
-    
-    if len(selected_tags_list) == 1:
-        db_filter = {"property": "Tags", "multi_select": {"contains": selected_tags_list[0]}}
-    else:
-        db_filter = {
-            "and": [{"property": "Tags", "multi_select": {"contains": t}} for t in selected_tags_list]
-        }
-
-    try:
-        results = notion.databases.query(database_id=db["id"], filter=db_filter)
-        pages = results.get("results", [])[:len(KEYS_EXPANDED)]
-        
-        if not pages:
-            click.echo("\nNo pages found with those exact tags.")
-            return
-
-        click.echo(f"\nFound {len(pages)} result(s):")
-        page = pick_from_list(
-            pages,
-            label_fn=lambda p: get_page_title(p),
-            key_list=KEYS_EXPANDED,
-            url_fn=lambda p: p.get("url"),
-            prompt="Select a page to read, or any other key to go back: "
-        )
-        if page:
-            read_page(page["id"])
-
-    except Exception as e:
-        click.echo(f"❌ Notion Query Error: {e}")
 
 # CHQ: Gemini AI made this to target folders at any depth
 def action_search_multi_tags(db):

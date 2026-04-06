@@ -382,13 +382,24 @@ def action_search_multi_tags(db):
         return
 
     selected_tag_group = set()
+    excluded_tag_group = set()  # CHQ: added by ClaudeAI
     title_filter = ""
 
     while True:
-        if selected_tag_group:
+        if selected_tag_group or excluded_tag_group:
             click.echo(
                 f"\n🛒 Current Selection Basket: {', '.join(selected_tag_group)}"
             )
+
+            # Display included tags
+            if selected_tag_group:
+                included_display = ", ".join(selected_tag_group)
+                click.echo(f"  ✓ Include: {included_display}")
+
+            # Display excluded tags
+            if excluded_tag_group:
+                excluded_display = ", ".join(excluded_tag_group)
+                click.echo(f"  ✗ Exclude: {excluded_display}")
 
             if title_filter:
                 click.echo(f"🔤 Title filter: '{title_filter}'")
@@ -402,19 +413,23 @@ def action_search_multi_tags(db):
             ]
             click.echo("\n--- What would you like to do? ---")
             selected_option = pick_from_list(
-                options, label_fn=lambda o: o["label"], key_list="12345"
+                options, label_fn=lambda o: o["label"], key_list="123456"
             )
 
             if not selected_option or selected_option["action"] == "cancel":
                 return
             if selected_option["action"] == "clear":
                 selected_tag_group.clear()
+                excluded_tag_group.clear()
                 title_filter = ""
                 continue
             if selected_option["action"] == "title":
                 title_filter = click.prompt(
                     "\n🔤 Enter title to search for (or press Enter to clear)"
                 )
+                continue
+            if selected_option["action"] == "toggle":
+                toggle_tag_inclusion(selected_tag_group, excluded_tag_group)
                 continue
             if selected_option["action"] == "search":
                 break
@@ -453,15 +468,17 @@ def action_search_multi_tags(db):
         # 3. SELECT TAGS
         # At this point, current_level_data MUST be a list
         if isinstance(current_level_data, list):
-            new_selections = pick_multi_from_list(
+            selected_tags_from_list = pick_multi_from_list(
                 current_level_data,
                 label_fn=lambda t: t,
                 list_size=KEYS_EXPANDED,
                 prompt="Press item keys to toggle, Enter to confirm: ",
             )
 
-            if new_selections:
-                selected_tag_group.update(new_selections)
+            if selected_tags_from_list:
+                selected_tag_group.update(selected_tags_from_list)
+                # CHQ: Claude AI: remove from excluded list if added beforehand
+                excluded_tag_group.difference_update(selected_tags_from_list)
         else:
             click.echo("⚠️ Expected a list of tags but found something else.")
 
@@ -472,31 +489,45 @@ def action_search_multi_tags(db):
 
     tags_list = list(selected_tag_group)
     click.echo(f"\n🔎 Searching Notion for: {', '.join(tags_list)}")
+    if selected_tag_group:
+        click.echo(f"   Include tags: {', '.join(selected_tag_group)}")
+    if excluded_tag_group:
+        click.echo(f"   Excluded tags: {', '.join(excluded_tag_group)}")
     if title_filter:
-        click.echo(f"   with title containing: '{title_filter}'")
+        click.echo(f"   Title contains: '{title_filter}'")
     click.echo("...")
 
     # Build filter
     filters = []
 
-    if tags_list:
-        if len(tags_list) == 1:
+    # Build include filters (AND all included tags)
+    if selected_tag_group:
+        if len(selected_tag_group) == 1:
             filters.append(
-                {"property": "Tags", "multi_select": {"contains": tags_list[0]}}
+                {
+                    "property": tags_property,
+                    "multi_select": {"contains": list(selected_tag_group)[0]},
+                }
             )
         else:
             filters.append(
                 {
                     "and": [
-                        {"property": "Tags", "multi_select": {"contains": tag}}
-                        for tag in tags_list
+                        {"property": tags_property, "multi_select": {"contains": tag}}
+                        for tag in selected_tag_group
                     ]
                 }
             )
 
+    # Build exclude filters (NOT any of the excluded tags)
+    if excluded_tag_group:
+        for tag in excluded_tag_group:
+            filters.append(
+                {"property": tags_property, "multi_select": {"does_not_contain": tag}}
+            )
+
     if title_filter:
         filters.append({"property": "title", "rich_text": {"contains": title_filter}})
-
     if len(filters) == 1:
         notion_filter = filters[0]
     else:

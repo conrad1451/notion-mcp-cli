@@ -186,15 +186,6 @@ def format_property_value(prop_data):
         return str(prop_data.get(type_name))
 
 # CHQ: ChatGPT created function
-def get_title_property_name2(database_id):
-    result = notion.databases.retrieve(database_id=database_id)
-    props = result.get("properties", {})
-    for name, prop in props.items():
-        if prop.get("type") == "title":
-            return name
-    raise ValueError("No title property found")
-
-
 def get_title_property_name(database_id):
     result = notion.databases.retrieve(database_id=database_id)
     props = result.get("properties", {})

@@ -261,6 +261,15 @@ def show_db_properties(db):
         click.echo(f"  ⚠️  Could not load properties: {e}")
 
 
+def get_multi_select_property_name(database_id):
+    result = notion.databases.retrieve(database_id=database_id)
+    props = result.get("properties", {})
+    for name, prop in props.items():
+        if prop.get("type") == "multi_select":
+            return name
+    raise ValueError("No multi_select property found")
+
+
 # ── Actions ────────────────────────────────────────────────────────────────────
 
 
@@ -379,6 +388,13 @@ def action_search_multi_tags(db):
             tag_hierarchy = json.load(f)
     except Exception as e:
         click.echo(f"❌ Could not load tag_categories.json: {e}")
+        return
+
+    # CHQ: ChatGPT fixed bug of missing tags_property
+    try:
+        tags_property = get_multi_select_property_name(db["id"])
+    except Exception as e:
+        click.echo(f"❌ Could not find tags property: {e}")
         return
 
     selected_tag_group = set()
@@ -500,6 +516,8 @@ def action_search_multi_tags(db):
     # Build filter
     filters = []
 
+    title_prop = get_title_property_name(db["id"])
+
     # Build include filters (AND all included tags)
     if selected_tag_group:
         if len(selected_tag_group) == 1:
@@ -526,8 +544,11 @@ def action_search_multi_tags(db):
                 {"property": tags_property, "multi_select": {"does_not_contain": tag}}
             )
 
+    # CHQ: ChatGPT fixed title filter bug
     if title_filter:
-        filters.append({"property": "title", "rich_text": {"contains": title_filter}})
+        filters.append(
+            {"property": title_prop, "title": {"contains": title_filter}}
+        )
     if len(filters) == 1:
         notion_filter = filters[0]
     else:

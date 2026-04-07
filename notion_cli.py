@@ -17,11 +17,11 @@ if not token:
     raise SystemExit(1)
 
 notion = Client(auth=token)
-
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), "databases.json")
 
 
 # ── Config ─────────────────────────────────────────────────────────────────────
+
 
 def load_databases():
     if not os.path.exists(CONFIG_PATH):
@@ -31,6 +31,12 @@ def load_databases():
         data = json.load(f)
     return data.get("databases", [])
 
+_DB_SCHEMA_CACHE = {}
+
+def get_database_schema(database_id):
+    if database_id not in _DB_SCHEMA_CACHE:
+        _DB_SCHEMA_CACHE[database_id] = notion.databases.retrieve(database_id=database_id)
+    return _DB_SCHEMA_CACHE[database_id]
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -38,12 +44,19 @@ KEYS_FEW = "123456789"
 KEYS = "123456789abcdefghijklmnopqrstuvwxyz"
 KEYS_EXPANDED = "123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 
+
 def hyperlink(text, url):
     """Wrap text in a terminal OSC 8 hyperlink."""
     return f"\033]8;;{url}\033\\{text}\033]8;;\033\\"
 
 
-def pick_from_list(items, label_fn, key_list=KEYS_FEW, url_fn=None, prompt="Press a key to select, or any other key to quit: "):
+def pick_from_list(
+    items,
+    label_fn,
+    key_list=KEYS_FEW,
+    url_fn=None,
+    prompt="Press a key to select, or any other key to quit: ",
+):
     """Display a keyed list and return the selected item, or None."""
     key_to_item = {}
     for i, item in enumerate(items):
@@ -63,15 +76,22 @@ def pick_from_list(items, label_fn, key_list=KEYS_FEW, url_fn=None, prompt="Pres
     click.echo(key)
     return key_to_item.get(key)
 
+
 # CHQ: Gemini AI refactored
-def pick_multi_from_list(items, label_fn, list_size=KEYS_FEW, url_fn=None, prompt="Press item keys to toggle, Enter to confirm: "):
+def pick_multi_from_list(
+    items,
+    label_fn,
+    key_list=KEYS_FEW,
+    url_fn=None,
+    prompt="Press item keys to toggle, Enter to confirm: ",
+):
     key_to_item = {}
     selected_keys = set()
 
     for i, item in enumerate(items):
-        if i >= len(list_size):
+        if i >= len(key_list):
             break
-        key = list_size[i]
+        key = key_list[i]
         key_to_item[key] = item
 
     def render():
@@ -81,10 +101,14 @@ def pick_multi_from_list(items, label_fn, list_size=KEYS_FEW, url_fn=None, promp
             label = label_fn(item)
             marker = "✓" if key in selected_keys else " "
             click.echo(f"  [{key}] {marker} {label}")
-        
+
         click.echo()
-        selected_labels = [label_fn(key_to_item[k]) for k in list_size if k in selected_keys]
-        click.echo(f"  Selected: {', '.join(selected_labels) if selected_labels else 'none'}")
+        selected_labels = [
+            label_fn(key_to_item[k]) for k in key_list if k in selected_keys
+        ]
+        click.echo(
+            f"  Selected: {', '.join(selected_labels) if selected_labels else 'none'}"
+        )
         click.echo()
         click.echo(prompt, nl=False)
 
@@ -96,14 +120,7 @@ def pick_multi_from_list(items, label_fn, list_size=KEYS_FEW, url_fn=None, promp
         # Handle Enter (Confirm)
         if key in (readchar.key.ENTER, "\r", "\n"):
             click.echo()
-            return [key_to_item[k] for k in list_size if k in selected_keys]
-
-        # Handle Space (Toggle)
-        elif key in (readchar.key.SPACE, " ", "\x20"):
-            # If your terminal isn't sending a key BEFORE the space, 
-            # we need to know which key the user wants to toggle.
-            # Usually, in this UI, users press the 'key' (e.g., '2') to toggle.
-            pass 
+            return [key_to_item[k] for k in key_list if k in selected_keys]
 
         # Handle Selection Keys (e.g., '1', '2', 'a', 'b')
         elif key in key_to_item:
@@ -111,13 +128,57 @@ def pick_multi_from_list(items, label_fn, list_size=KEYS_FEW, url_fn=None, promp
                 selected_keys.discard(key)
             else:
                 selected_keys.add(key)
-        
+
         # Handle Escape or Ctrl+C (Cancel/Back)
         elif key in (readchar.key.ESC, "\x1b"):
             click.echo("\nCancelled.")
             return []
 
         render()
+
+
+def toggle_tag_inclusion(selected_tag_group, excluded_tag_group):
+    """
+    Let the user move tags between Include and Exclude groups.
+    Returns nothing; mutates the sets in place.
+    """
+    all_tags = sorted(selected_tag_group | excluded_tag_group)
+
+    if not all_tags:
+        click.echo("\n⚠️ No tags selected yet.")
+        return
+
+    click.echo("\n🔄 Toggle tags between Include and Exclude:\n")
+    click.echo("Current status:")
+    for tag in all_tags:
+        status = "✓ Include" if tag in selected_tag_group else "✗ Exclude"
+        click.echo(f"  - {tag}: {status}")
+
+    click.echo()
+    chosen_tags = pick_multi_from_list(
+        all_tags,
+        label_fn=lambda t: (
+            f"{t} [{'INCLUDE' if t in selected_tag_group else 'EXCLUDE'}]"
+        ),
+        key_list=KEYS_EXPANDED,
+        prompt="Select tags to toggle, then press Enter: ",
+    )
+
+    if not chosen_tags:
+        click.echo("No tags toggled.")
+        return
+
+    for tag in chosen_tags:
+        if tag in selected_tag_group:
+            selected_tag_group.remove(tag)
+            excluded_tag_group.add(tag)
+        elif tag in excluded_tag_group:
+            excluded_tag_group.remove(tag)
+            selected_tag_group.add(tag)
+
+    click.echo("\n✅ Updated tag inclusion/exclusion.")
+
+
 def extract_plain_text(rich_text_list):
     return "".join(block.get("plain_text", "") for block in rich_text_list)
 
@@ -158,6 +219,7 @@ def blocks_to_text(blocks):
             lines.append(text)
     return "\n".join(lines)
 
+
 # CHQ: ChatGPT created function
 def format_property_value(prop_data):
     type_name = prop_data.get("type")
@@ -182,38 +244,39 @@ def format_property_value(prop_data):
         return prop_data.get("email")
     elif type_name == "phone_number":
         return prop_data.get("phone_number")
-    else:
-        return str(prop_data.get(type_name))
+    elif type_name == "status":
+        return (prop_data.get("status") or {}).get("name")
+    elif type_name == "created_time":
+        return prop_data.get("created_time")
+    elif type_name == "last_edited_time":
+        return prop_data.get("last_edited_time")
+
+    elif type_name == "people":
+        return ", ".join(p.get("name", "Unknown") for p in prop_data.get("people", []))
+     
 
 # CHQ: ChatGPT created function
-def get_title_property_name2(database_id):
-    result = notion.databases.retrieve(database_id=database_id)
-    props = result.get("properties", {})
-    for name, prop in props.items():
-        if prop.get("type") == "title":
-            return name
-    raise ValueError("No title property found")
-
-
 def get_title_property_name(database_id):
-    result = notion.databases.retrieve(database_id=database_id)
+    result = get_database_schema(database_id)
     props = result.get("properties", {})
     for name, prop in props.items():
         if prop.get("type") == "title":
             return name
     raise ValueError("No title property found")
 
-def print_page_properties(page_id, prop_list):
+
+def print_page_properties(page_id, properties):
     # source: ChatGPT (via Bing)
-    if not prop_list:
+    if not properties:
         click.echo("No properties found for this page.")
         return
 
     click.echo(f"Properties for page {page_id}:")
-    for prop_name, prop_data in prop_list.items():
+    for prop_name, prop_data in properties.items():
         click.echo(f"- {prop_name} ({prop_data.get('type', 'unknown')}):")
         click.echo(f" {format_property_value(prop_data)}")
         click.echo()
+
 
 def read_page(page_id):
     page = notion.pages.retrieve(page_id=page_id)
@@ -234,30 +297,57 @@ def read_page(page_id):
     click.echo(content if content.strip() else "(Page is empty)")
     click.echo()
 
+
 # CHQ: Claude AI added function
 def show_db_properties(db):
     try:
-        result = notion.databases.retrieve(database_id=db["id"])
+        result = get_database_schema(database_id)
         props = result.get("properties", {})
         click.echo(f"\n  Properties: {', '.join(props.keys())}")
     except Exception as e:
         click.echo(f"  ⚠️  Could not load properties: {e}")
 
+
+def get_tags_property_name(db):
+    prop_name = db.get("tags_property")
+    if not prop_name:
+        raise ValueError("No tags_property configured for this database")
+    result = get_database_schema(database_id)
+    props = result.get("properties", {})
+
+    if prop_name not in props:
+        raise ValueError(f"Configured tags_property '{prop_name}' not found")
+
+    if props[prop_name].get("type") != "multi_select":
+        raise ValueError(f"Configured tags_property '{prop_name}' is not multi_select")
+
+    return prop_name
+
 # ── Actions ────────────────────────────────────────────────────────────────────
+
 
 # CHQ: Claude AI updated to allow searching by specific properties
 def action_search(db):
     # Step 1: fetch real properties from Notion
     click.echo("\n⏳ Loading database properties...")
     try:
-        result = notion.databases.retrieve(database_id=db["id"])
+        result = get_database_schema(database_id)
         props = result.get("properties", {})
     except Exception as e:
         click.echo(f"❌ Could not load properties: {e}")
         return
 
     # Only include searchable property types
-    SEARCHABLE_TYPES = {"title", "multi_select", "select", "rich_text", "number", "email", "phone_number", "url"}
+    SEARCHABLE_TYPES = {
+        "title",
+        "multi_select",
+        "select",
+        "rich_text",
+        "number",
+        "email",
+        "phone_number",
+        "url",
+    }
 
     search_fields = []
     for name, prop in props.items():
@@ -275,7 +365,7 @@ def action_search(db):
         search_fields,
         label_fn=lambda f: f"{f['label']} ({f['type']})",
         key_list=KEYS,
-        prompt="Pick a field: "
+        prompt="Pick a field: ",
     )
     if field is None:
         click.echo("No field selected.")
@@ -314,7 +404,7 @@ def action_search(db):
         click.echo(f"❌ Error querying database: {e}")
         return
 
-    pages = results.get("results", [])[:len(KEYS_EXPANDED)]
+    pages = results.get("results", [])[: len(KEYS_EXPANDED)]
 
     if not pages:
         click.echo(f"\nNo pages found where \"{field['label']}\" contains \"{query}\".")
@@ -326,13 +416,16 @@ def action_search(db):
         label_fn=lambda p: get_page_title(p),
         key_list=KEYS_EXPANDED,
         url_fn=lambda p: p.get("url"),
-        prompt="Press a key to open a page, or any other key to go back: "
+        prompt="Press a key to open a page, or any other key to go back: ",
     )
     if page:
         read_page(page["id"])
     else:
         click.echo("No page selected.")
+
+
 # ── Command menu ───────────────────────────────────────────────────────────────
+
 
 # CHQ: Gemini AI made this to target folders at any depth
 def action_search_multi_tags(db):
@@ -342,60 +435,99 @@ def action_search_multi_tags(db):
         if not tag_file:
             click.echo("❌ No tag file configured for this database.")
             return
-        file_path = os.path.join(os.path.dirname(__file__), tag_file)
-        
-        with open(file_path, 'r') as f:
+        tag_file_path = os.path.join(os.path.dirname(__file__), tag_file)
+
+        with open(tag_file_path, "r") as f:
             tag_hierarchy = json.load(f)
     except Exception as e:
         click.echo(f"❌ Could not load tag_categories.json: {e}")
         return
 
-    final_tag_basket = set()
+    # CHQ: ChatGPT fixed bug of missing tags_property
+    try:
+        tags_property = get_tags_property_name(db)
+    except Exception as e:
+        click.echo(f"❌ Could not find tags property: {e}")
+        return
+
+    selected_tag_group = set()
+    excluded_tag_group = set()  # CHQ: added by ClaudeAI
+    title_filter = ""
 
     while True:
-        if final_tag_basket:
-            click.echo(f"\n🛒 Current Selection Basket: {', '.join(final_tag_basket)}")
+        if selected_tag_group or excluded_tag_group:
+            click.echo("\n🛒 Current Selection Basket:")
+
+            if selected_tag_group:
+                click.echo(f"  ✓ Include: {', '.join(sorted(selected_tag_group))}")
+            else:
+                click.echo("  ✓ Include: none")
+
+            if excluded_tag_group:
+                click.echo(f"  ✗ Exclude: {', '.join(sorted(excluded_tag_group))}")
+            else:
+                click.echo("  ✗ Exclude: none")
+
+            if title_filter:
+                click.echo(f"  🔤 Title contains: '{title_filter}'")
+
             options = [
                 {"label": "Search Notion with these tags", "action": "search"},
                 {"label": "Add more tags from another category", "action": "continue"},
+                {"label": "Add/change title filter", "action": "title"},
+                {
+                    "label": "Toggle include/exclude for selected tags",
+                    "action": "toggle",
+                },
                 {"label": "Clear all and start over", "action": "clear"},
-                {"label": "Cancel and go back", "action": "cancel"}
+                {"label": "Cancel and go back", "action": "cancel"},
             ]
             click.echo("\n--- What would you like to do? ---")
-            choice = pick_from_list(options, label_fn=lambda o: o["label"], key_list="1234")
-            
-            if not choice or choice["action"] == "cancel": return
-            if choice["action"] == "clear": 
-                final_tag_basket.clear()
-                continue
-            if choice["action"] == "search":
-                break 
+            selected_option = pick_from_list(
+                options, label_fn=lambda o: o["label"], key_list="123456"
+            )
 
-        # 1. Start at the top of the hierarchy
+            if not selected_option or selected_option["action"] == "cancel":
+                return
+            if selected_option["action"] == "clear":
+                selected_tag_group.clear()
+                excluded_tag_group.clear()
+                title_filter = ""
+                continue
+            if selected_option["action"] == "title":
+                title_filter = click.prompt(
+                    "\n🔤 Enter title to search for (or press Enter to clear)"
+                )
+                continue
+            if selected_option["action"] == "toggle":
+                toggle_tag_inclusion(selected_tag_group, excluded_tag_group)
+                continue
+            if selected_option["action"] == "search":
+                break
+
         current_level_data = tag_hierarchy
         current_path = []
 
-        # 2. RECURSIVE DIVE LOOP
         # Keep asking the user to pick a sub-folder as long as the data is a dictionary
         while isinstance(current_level_data, dict):
             options = list(current_level_data.keys())
-            
+
             # Show the user where they are in the folder structure
             path_str = " > ".join(current_path) if current_path else "Root"
             click.echo(f"\n📂 Location: {path_str}")
-            
+
             selected_key = pick_from_list(
-                options, 
-                label_fn=lambda x: x, 
+                options,
+                label_fn=lambda x: x,
                 key_list=KEYS_EXPANDED,
-                prompt="Select a category/folder (or any other key to go back): "
+                prompt="Select a category/folder (or any other key to go back): ",
             )
-            
+
             if not selected_key:
                 # This breaks the "dive" and goes back to the main basket menu
                 current_level_data = None
                 break
-            
+
             # Move deeper into the dictionary
             current_path.append(selected_key)
             current_level_data = current_level_data[selected_key]
@@ -407,55 +539,97 @@ def action_search_multi_tags(db):
         # 3. SELECT TAGS
         # At this point, current_level_data MUST be a list
         if isinstance(current_level_data, list):
-            new_selections = pick_multi_from_list(
+            selected_tags_from_list = pick_multi_from_list(
                 current_level_data,
                 label_fn=lambda t: t,
-                list_size=KEYS_EXPANDED,
-                prompt="Press item keys to toggle, Enter to confirm: "
+                key_list=KEYS_EXPANDED,
+                prompt="Press item keys to toggle, Enter to confirm: ",
             )
 
-            if new_selections:
-                final_tag_basket.update(new_selections)
+            if selected_tags_from_list:
+                selected_tag_group.update(selected_tags_from_list)
+                # CHQ: Claude AI: remove from excluded list if added beforehand
+                excluded_tag_group.difference_update(selected_tags_from_list)
         else:
             click.echo("⚠️ Expected a list of tags but found something else.")
 
     # 4. PERFORM THE ACTUAL NOTION SEARCH
-    if not final_tag_basket:
-        click.echo("No tags selected.")
+    if not selected_tag_group and not title_filter:
+        click.echo("No tags or title selected.")
         return
 
-    selected_tags_list = list(final_tag_basket)
-    click.echo(f"\n🔎 Searching Notion for: {', '.join(selected_tags_list)}...")
-    
-    # Build the Notion Filter (AND logic)
-    if len(selected_tags_list) == 1:
-        db_filter = {"property": "Tags", "multi_select": {"contains": selected_tags_list[0]}}
+    tags_list = list(selected_tag_group)
+    click.echo(f"\n🔎 Searching Notion for: {', '.join(tags_list)}")
+    if selected_tag_group:
+        click.echo(f"   Include tags: {', '.join(selected_tag_group)}")
+    if excluded_tag_group:
+        click.echo(f"   Excluded tags: {', '.join(excluded_tag_group)}")
+    if title_filter:
+        click.echo(f"   Title contains: '{title_filter}'")
+    click.echo("...")
+
+    # Build filter
+    filters = []
+
+    title_prop = get_title_property_name(db["id"])
+
+    # Build include filters (AND all included tags)
+    if selected_tag_group:
+        if len(selected_tag_group) == 1:
+            filters.append(
+                {
+                    "property": tags_property,
+                    "multi_select": {"contains": list(selected_tag_group)[0]},
+                }
+            )
+        else:
+            filters.append(
+                {
+                    "and": [
+                        {"property": tags_property, "multi_select": {"contains": tag}}
+                        for tag in selected_tag_group
+                    ]
+                }
+            )
+
+    # Build exclude filters (NOT any of the excluded tags)
+    if excluded_tag_group:
+        for tag in excluded_tag_group:
+            filters.append(
+                {"property": tags_property, "multi_select": {"does_not_contain": tag}}
+            )
+
+    # CHQ: ChatGPT fixed title filter bug
+    if title_filter:
+        filters.append({"property": title_prop, "title": {"contains": title_filter}})
+    if len(filters) == 1:
+        notion_filter = filters[0]
     else:
-        db_filter = {
-            "and": [{"property": "Tags", "multi_select": {"contains": t}} for t in selected_tags_list]
-        }
+        notion_filter = {"and": filters}
 
     try:
-        results = notion.databases.query(database_id=db["id"], filter=db_filter)
-        pages = results.get("results", [])[:len(KEYS_EXPANDED)]
-        
-        if not pages:
-            click.echo("\nNo pages found with those exact tags.")
+        response = notion.databases.query(database_id=db["id"], filter=notion_filter)
+        results = response.get("results", [])[: len(KEYS_EXPANDED)]
+
+        if not results:
+            click.echo("\nNo pages found matching your criteria.")
             return
 
-        click.echo(f"\nFound {len(pages)} result(s):")
-        page = pick_from_list(
-            pages,
-            label_fn=lambda p: get_page_title(p),
+        click.echo(f"\nFound {len(results)} result(s):")
+        selected_page = pick_from_list(
+            results,
+            label_fn=lambda page: get_page_title(page),
             key_list=KEYS_EXPANDED,
-            url_fn=lambda p: p.get("url"),
-            prompt="Select a page to read, or any other key to go back: "
+            url_fn=lambda page: page.get("url"),
+            prompt="Select a page to read, or any other key to go back: ",
         )
-        if page:
-            read_page(page["id"])
 
-    except Exception as e:
-        click.echo(f"❌ Notion Query Error: {e}")
+        if selected_page:
+            read_page(selected_page["id"])
+
+    except Exception as error:
+        click.echo(f"❌ Notion Query Error: {error}")
+
 
 def action_read(db):
     page_id = click.prompt("\n📄 Enter page ID")
@@ -469,27 +643,27 @@ def action_create(db):
     title = click.prompt("\n✏️  Page title")
     body = click.prompt("Body text (optional, press Enter to skip)", default="")
     children = []
-    
     # CHQ: ChatGPT made function to dynamically Find
-    #      name of title property 
+    #      name of title property
     title_prop = get_title_property_name(db["id"])
 
     if body:
-        children.append({
-            "object": "block",
-            "type": "paragraph",
-            "paragraph": {
-                "rich_text": [{"type": "text", "text": {"content": body}}]
+        children.append(
+            {
+                "object": "block",
+                "type": "paragraph",
+                "paragraph": {
+                    "rich_text": [{"type": "text", "text": {"content": body}}]
+                },
             }
-        })
+        )
     try:
         page = notion.pages.create(
             parent={"type": "database_id", "database_id": db["id"]},
-             
-            properties={ title_prop: {
-                    "title": [{"type": "text", "text": {"content": title}}] }
+            properties={
+                title_prop: {"title": [{"type": "text", "text": {"content": title}}]}
             },
-            children=children
+            children=children,
         )
         click.echo(f"\n✅ Page created: {title}")
         click.echo(f"   ID:  {page['id']}")
@@ -504,39 +678,45 @@ def action_append(db):
     try:
         notion.blocks.children.append(
             block_id=page_id,
-            children=[{
-                "object": "block",
-                "type": "paragraph",
-                "paragraph": {
-                    "rich_text": [{"type": "text", "text": {"content": text}}]
+            children=[
+                {
+                    "object": "block",
+                    "type": "paragraph",
+                    "paragraph": {
+                        "rich_text": [{"type": "text", "text": {"content": text}}]
+                    },
                 }
-            }]
+            ],
         )
         click.echo(f"\n✅ Appended text to page {page_id}\n")
     except Exception as e:
         click.echo(f"❌ Error: {e}")
 
+
 COMMANDS = [
-    {"label": "Search pages",      "fn": action_search},
-    {"label": "Search by multiple tags","fn": action_search_multi_tags}, # CHQ: Claude AI added
-    {"label": "Read page by ID",   "fn": action_read},
-    {"label": "Create page",       "fn": action_create},
-    {"label": "Append to page",    "fn": action_append},
-    {"label": "Switch database",   "fn": None},
-    {"label": "Quit",              "fn": None},
+    {"label": "Search pages", "fn": action_search},
+    {
+        "label": "Search by multiple tags",
+        "fn": action_search_multi_tags,
+    },  # CHQ: Claude AI added
+    {"label": "Read page by ID", "fn": action_read},
+    {"label": "Create page", "fn": action_create},
+    {"label": "Append to page", "fn": action_append},
+    {"label": "Switch database", "fn": None},
+    {"label": "Quit", "fn": None},
 ]
 
 
 def command_menu(db):
     while True:
         click.echo(f"\n📂 Database: {db['name']}")
-        show_db_properties(db)          # CHQ: Claude AI added function
+        show_db_properties(db)  # CHQ: Claude AI added function
         click.echo("─" * 40)
         cmd = pick_from_list(
             COMMANDS,
             label_fn=lambda c: c["label"],
             key_list=KEYS,
-            prompt="Choose an action: "
+            prompt="Choose an action: ",
         )
 
         if cmd is None or cmd["label"] == "Quit":
@@ -553,6 +733,7 @@ def command_menu(db):
 
 # ── Entry point ────────────────────────────────────────────────────────────────
 
+
 @click.command()
 def cli():
     """Notion terminal CLI — interactive database selector."""
@@ -568,7 +749,7 @@ def cli():
             databases,
             label_fn=lambda d: d["name"],
             key_list=KEYS,
-            prompt="Press a key to select: "
+            prompt="Press a key to select: ",
         )
         if db is None:
             click.echo("\nGoodbye 👋\n")

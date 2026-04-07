@@ -32,6 +32,12 @@ def load_databases():
         data = json.load(f)
     return data.get("databases", [])
 
+_DB_SCHEMA_CACHE = {}
+
+def get_database_schema(database_id):
+    if database_id not in _DB_SCHEMA_CACHE:
+        _DB_SCHEMA_CACHE[database_id] = notion.databases.retrieve(database_id=database_id)
+    return _DB_SCHEMA_CACHE[database_id]
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -245,7 +251,7 @@ def format_property_value(prop_data):
 
 # CHQ: ChatGPT created function
 def get_title_property_name(database_id):
-    result = notion.databases.retrieve(database_id=database_id)
+    result = get_database_schema(database_id)
     props = result.get("properties", {})
     for name, prop in props.items():
         if prop.get("type") == "title":
@@ -289,7 +295,7 @@ def read_page(page_id):
 # CHQ: Claude AI added function
 def show_db_properties(db):
     try:
-        result = notion.databases.retrieve(database_id=db["id"])
+        result = get_database_schema(database_id)
         props = result.get("properties", {})
         click.echo(f"\n  Properties: {', '.join(props.keys())}")
     except Exception as e:
@@ -297,7 +303,7 @@ def show_db_properties(db):
 
 
 def get_multi_select_property_name(database_id):
-    result = notion.databases.retrieve(database_id=database_id)
+    result = get_database_schema(database_id)
     props = result.get("properties", {})
     for name, prop in props.items():
         if prop.get("type") == "multi_select":
@@ -308,8 +314,7 @@ def get_tags_property_name(db):
     prop_name = db.get("tags_property")
     if not prop_name:
         raise ValueError("No tags_property configured for this database")
-
-    result = notion.databases.retrieve(database_id=db["id"])
+    result = get_database_schema(database_id)
     props = result.get("properties", {})
 
     if prop_name not in props:
@@ -328,7 +333,7 @@ def action_search(db):
     # Step 1: fetch real properties from Notion
     click.echo("\n⏳ Loading database properties...")
     try:
-        result = notion.databases.retrieve(database_id=db["id"])
+        result = get_database_schema(database_id)
         props = result.get("properties", {})
     except Exception as e:
         click.echo(f"❌ Could not load properties: {e}")

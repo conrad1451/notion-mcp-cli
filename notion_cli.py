@@ -17,7 +17,6 @@ if not token:
     raise SystemExit(1)
 
 notion = Client(auth=token)
-
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), "databases.json")
 
 
@@ -245,9 +244,16 @@ def format_property_value(prop_data):
         return prop_data.get("email")
     elif type_name == "phone_number":
         return prop_data.get("phone_number")
-    else:
-        return str(prop_data.get(type_name))
+    elif type_name == "status":
+        return (prop_data.get("status") or {}).get("name")
+    elif type_name == "created_time":
+        return prop_data.get("created_time")
+    elif type_name == "last_edited_time":
+        return prop_data.get("last_edited_time")
 
+    elif type_name == "people":
+        return ", ".join(p.get("name", "Unknown") for p in prop_data.get("people", []))
+     
 
 # CHQ: ChatGPT created function
 def get_title_property_name(database_id):
@@ -645,7 +651,6 @@ def action_create(db):
     title = click.prompt("\n✏️  Page title")
     body = click.prompt("Body text (optional, press Enter to skip)", default="")
     children = []
-
     # CHQ: ChatGPT made function to dynamically Find
     #      name of title property
     title_prop = get_title_property_name(db["id"])

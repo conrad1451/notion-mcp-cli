@@ -269,6 +269,21 @@ def get_multi_select_property_name(database_id):
             return name
     raise ValueError("No multi_select property found")
 
+def get_tags_property_name(db):
+    prop_name = db.get("tags_property")
+    if not prop_name:
+        raise ValueError("No tags_property configured for this database")
+
+    result = notion.databases.retrieve(database_id=db["id"])
+    props = result.get("properties", {})
+
+    if prop_name not in props:
+        raise ValueError(f"Configured tags_property '{prop_name}' not found")
+
+    if props[prop_name].get("type") != "multi_select":
+        raise ValueError(f"Configured tags_property '{prop_name}' is not multi_select")
+
+    return prop_name
 
 # ── Actions ────────────────────────────────────────────────────────────────────
 
@@ -392,7 +407,7 @@ def action_search_multi_tags(db):
 
     # CHQ: ChatGPT fixed bug of missing tags_property
     try:
-        tags_property = get_multi_select_property_name(db["id"])
+        tags_property = get_tags_property_name(db)
     except Exception as e:
         click.echo(f"❌ Could not find tags property: {e}")
         return
@@ -546,9 +561,7 @@ def action_search_multi_tags(db):
 
     # CHQ: ChatGPT fixed title filter bug
     if title_filter:
-        filters.append(
-            {"property": title_prop, "title": {"contains": title_filter}}
-        )
+        filters.append({"property": title_prop, "title": {"contains": title_filter}})
     if len(filters) == 1:
         notion_filter = filters[0]
     else:

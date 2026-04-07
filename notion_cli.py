@@ -404,8 +404,13 @@ def action_search(db):
         click.echo(f"❌ Error querying database: {e}")
         return
 
-    pages = results.get("results", [])[: len(KEYS_EXPANDED)]
+    # CHQ: ChatGPT added message warning when reuslts shown are only a subset of total results
+    all_pages = results.get("results", [])
+    pages = all_pages[: len(KEYS_EXPANDED)]
 
+    if len(all_pages) > len(KEYS_EXPANDED):
+        click.echo(f"⚠️ Showing first {len(KEYS_EXPANDED)} results only.")
+    
     if not pages:
         click.echo(f"\nNo pages found where \"{field['label']}\" contains \"{query}\".")
         return

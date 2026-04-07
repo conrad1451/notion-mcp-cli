@@ -139,6 +139,48 @@ def pick_multi_from_list(
         render()
 
 
+def toggle_tag_inclusion(selected_tag_group, excluded_tag_group):
+    """
+    Let the user move tags between Include and Exclude groups.
+    Returns nothing; mutates the sets in place.
+    """
+    all_tags = sorted(selected_tag_group | excluded_tag_group)
+
+    if not all_tags:
+        click.echo("\n⚠️ No tags selected yet.")
+        return
+
+    click.echo("\n🔄 Toggle tags between Include and Exclude:\n")
+    click.echo("Current status:")
+    for tag in all_tags:
+        status = "✓ Include" if tag in selected_tag_group else "✗ Exclude"
+        click.echo(f"  - {tag}: {status}")
+
+    click.echo()
+    chosen_tags = pick_multi_from_list(
+        all_tags,
+        label_fn=lambda t: (
+            f"{t} [{'INCLUDE' if t in selected_tag_group else 'EXCLUDE'}]"
+        ),
+        key_list=KEYS_EXPANDED,
+        prompt="Select tags to toggle, then press Enter: ",
+    )
+
+    if not chosen_tags:
+        click.echo("No tags toggled.")
+        return
+
+    for tag in chosen_tags:
+        if tag in selected_tag_group:
+            selected_tag_group.remove(tag)
+            excluded_tag_group.add(tag)
+        elif tag in excluded_tag_group:
+            excluded_tag_group.remove(tag)
+            selected_tag_group.add(tag)
+
+    click.echo("\n✅ Updated tag inclusion/exclusion.")
+
+
 def extract_plain_text(rich_text_list):
     return "".join(block.get("plain_text", "") for block in rich_text_list)
 
@@ -439,6 +481,10 @@ def action_search_multi_tags(db):
                 {"label": "Search Notion with these tags", "action": "search"},
                 {"label": "Add more tags from another category", "action": "continue"},
                 {"label": "Add/change title filter", "action": "title"},
+                {
+                    "label": "Toggle include/exclude for selected tags",
+                    "action": "toggle",
+                },
                 {"label": "Clear all and start over", "action": "clear"},
                 {"label": "Cancel and go back", "action": "cancel"},
             ]

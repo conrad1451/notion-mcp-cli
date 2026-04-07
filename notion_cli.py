@@ -301,7 +301,7 @@ def read_page(page_id):
 # CHQ: Claude AI added function
 def show_db_properties(db):
     try:
-        result = get_database_schema(database_id)
+        result = get_database_schema(db["id"])
         props = result.get("properties", {})
         click.echo(f"\n  Properties: {', '.join(props.keys())}")
     except Exception as e:
@@ -312,7 +312,7 @@ def get_tags_property_name(db):
     prop_name = db.get("tags_property")
     if not prop_name:
         raise ValueError("No tags_property configured for this database")
-    result = get_database_schema(database_id)
+    result = get_database_schema(db["id"])
     props = result.get("properties", {})
 
     if prop_name not in props:
@@ -331,7 +331,7 @@ def action_search(db):
     # Step 1: fetch real properties from Notion
     click.echo("\n⏳ Loading database properties...")
     try:
-        result = get_database_schema(database_id)
+        result = get_database_schema(db["id"])
         props = result.get("properties", {})
     except Exception as e:
         click.echo(f"❌ Could not load properties: {e}")

@@ -117,13 +117,6 @@ def pick_multi_from_list(
             click.echo()
             return [key_to_item[k] for k in key_list if k in selected_keys]
 
-        # Handle Space (Toggle)
-        elif key in (readchar.key.SPACE, " ", "\x20"):
-            # If your terminal isn't sending a key BEFORE the space,
-            # we need to know which key the user wants to toggle.
-            # Usually, in this UI, users press the 'key' (e.g., '2') to toggle.
-            pass
-
         # Handle Selection Keys (e.g., '1', '2', 'a', 'b')
         elif key in key_to_item:
             if key in selected_keys:

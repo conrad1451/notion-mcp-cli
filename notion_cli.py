@@ -265,14 +265,14 @@ def get_title_property_name(database_id):
     raise ValueError("No title property found")
 
 
-def print_page_properties(page_id, prop_list):
+def print_page_properties(page_id, properties):
     # source: ChatGPT (via Bing)
-    if not prop_list:
+    if not properties:
         click.echo("No properties found for this page.")
         return
 
     click.echo(f"Properties for page {page_id}:")
-    for prop_name, prop_data in prop_list.items():
+    for prop_name, prop_data in properties.items():
         click.echo(f"- {prop_name} ({prop_data.get('type', 'unknown')}):")
         click.echo(f" {format_property_value(prop_data)}")
         click.echo()
@@ -307,14 +307,6 @@ def show_db_properties(db):
     except Exception as e:
         click.echo(f"  ⚠️  Could not load properties: {e}")
 
-
-def get_multi_select_property_name(database_id):
-    result = get_database_schema(database_id)
-    props = result.get("properties", {})
-    for name, prop in props.items():
-        if prop.get("type") == "multi_select":
-            return name
-    raise ValueError("No multi_select property found")
 
 def get_tags_property_name(db):
     prop_name = db.get("tags_property")

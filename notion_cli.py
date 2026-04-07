@@ -460,22 +460,20 @@ def action_search_multi_tags(db):
 
     while True:
         if selected_tag_group or excluded_tag_group:
-            click.echo(
-                f"\n🛒 Current Selection Basket: {', '.join(selected_tag_group)}"
-            )
+            click.echo("\n🛒 Current Selection Basket:")
 
-            # Display included tags
             if selected_tag_group:
-                included_display = ", ".join(selected_tag_group)
-                click.echo(f"  ✓ Include: {included_display}")
+                click.echo(f"  ✓ Include: {', '.join(sorted(selected_tag_group))}")
+            else:
+                click.echo("  ✓ Include: none")
 
-            # Display excluded tags
             if excluded_tag_group:
-                excluded_display = ", ".join(excluded_tag_group)
-                click.echo(f"  ✗ Exclude: {excluded_display}")
+                click.echo(f"  ✗ Exclude: {', '.join(sorted(excluded_tag_group))}")
+            else:
+                click.echo("  ✗ Exclude: none")
 
             if title_filter:
-                click.echo(f"🔤 Title filter: '{title_filter}'")
+                click.echo(f"  🔤 Title contains: '{title_filter}'")
 
             options = [
                 {"label": "Search Notion with these tags", "action": "search"},

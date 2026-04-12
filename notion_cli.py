@@ -15,13 +15,18 @@ token = os.getenv("NOTION_TOKEN")
 if not token:
     click.echo("❌ NOTION_TOKEN is not set.")
     raise SystemExit(1)
-
 notion = Client(auth=token)
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), "databases.json")
 
 
 # ── Config ─────────────────────────────────────────────────────────────────────
 
+# CHQ: ChatGPT added fflag to turn ondebug print staements during debugging state
+DEBUG = os.getenv("DEBUG", "").lower() in ("1", "true", "yes")
+
+def debug(msg):
+    if DEBUG:
+        click.echo(f"[DEBUG] {msg}")
 
 def load_databases():
     if not os.path.exists(CONFIG_PATH):
@@ -429,9 +434,6 @@ def action_search(db):
         click.echo("No page selected.")
 
 
-# ── Command menu ───────────────────────────────────────────────────────────────
-
-
 # CHQ: Gemini AI made this to target folders at any depth
 def action_search_multi_tags(db):
     # 0. Load the local tag category file
@@ -613,6 +615,9 @@ def action_search_multi_tags(db):
         notion_filter = {"and": filters}
 
     try:
+        debug(f"tags_property = {tags_property}")
+        debug(f"title_prop = {title_prop}")
+        debug(json.dumps(notion_filter, indent=2))
         response = notion.databases.query(database_id=db["id"], filter=notion_filter)
         results = response.get("results", [])[: len(KEYS_EXPANDED)]
 
@@ -696,6 +701,9 @@ def action_append(db):
         click.echo(f"\n✅ Appended text to page {page_id}\n")
     except Exception as e:
         click.echo(f"❌ Error: {e}")
+
+
+# ── Command menu ───────────────────────────────────────────────────────────────
 
 
 COMMANDS = [

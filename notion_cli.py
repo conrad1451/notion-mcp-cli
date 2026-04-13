@@ -15,13 +15,18 @@ token = os.getenv("NOTION_TOKEN")
 if not token:
     click.echo("❌ NOTION_TOKEN is not set.")
     raise SystemExit(1)
-
 notion = Client(auth=token)
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), "databases.json")
 
 
 # ── Config ─────────────────────────────────────────────────────────────────────
 
+# CHQ: ChatGPT added fflag to turn ondebug print staements during debugging state
+DEBUG = os.getenv("DEBUG", "").lower() in ("1", "true", "yes")
+
+def debug(msg):
+    if DEBUG:
+        click.echo(f"[DEBUG] {msg}")
 
 def load_databases():
     if not os.path.exists(CONFIG_PATH):
@@ -323,20 +328,42 @@ def get_tags_property_name(db):
 
     return prop_name
 
-# ── Actions ────────────────────────────────────────────────────────────────────
 
-
-# CHQ: Claude AI updated to allow searching by specific properties
-def action_search(db):
-    # Step 1: fetch real properties from Notion
-    click.echo("\n⏳ Loading database properties...")
-    try:
-        result = get_database_schema(db["id"])
-        props = result.get("properties", {})
-    except Exception as e:
-        click.echo(f"❌ Could not load properties: {e}")
+# CHQ: ChatGPT created so CLI UX goes back to search results to
+#      allow additional pages to be read without triggered a
+#      duplicate search
+def browse_pages(pages):
+    """Let user repeatedly open pages from a result list."""
+    if not pages:
         return
 
+    while True:
+        click.echo("\nSelect a page to read, or any other key to go back:\n")
+
+        selected_page = pick_from_list(
+            pages,
+            label_fn=lambda p: get_page_title(p),
+            key_list=KEYS_EXPANDED,
+            url_fn=lambda p: p.get("url"),
+            prompt="Choice: ",
+        )
+
+        if not selected_page:
+            break
+
+        read_page(selected_page["id"])
+
+        # # Pause before returning to results
+        # click.echo("\n↩ Press any key to return to results...")
+        # readchar.readkey()
+
+        click.echo("\n↩ Press Enter to go back, or SPACEBAR to exit results...")
+        key = readchar.readkey()
+        if key == " ":
+            break
+
+
+def set_search_fields(props):
     # Only include searchable property types
     SEARCHABLE_TYPES = {
         "title",
@@ -357,7 +384,48 @@ def action_search(db):
 
     if not search_fields:
         click.echo("No searchable properties found.")
+        # return
+
+    return search_fields
+
+def set_db_filters():
+    db_filter = {}
+    if ptype == "title":
+        db_filter = {"property": prop_name, "title": {"contains": query}}
+    elif ptype == "rich_text":
+        db_filter = {"property": prop_name, "rich_text": {"contains": query}}
+    elif ptype == "multi_select":
+        db_filter = {"property": prop_name, "multi_select": {"contains": query}}
+    elif ptype == "select":
+        db_filter = {"property": prop_name, "select": {"equals": query}}
+    elif ptype == "number":
+        try:
+            db_filter = {"property": prop_name, "number": {"equals": float(query)}}
+        except ValueError:
+            click.echo("❌ Invalid number.")
+            return
+    elif ptype in ("email", "phone_number", "url"):
+        db_filter = {"property": prop_name, ptype: {"contains": query}}
+    else:
+        click.echo(f"⚠️ Unsupported filter type: {ptype}")
+        # return
+    return db_filter
+
+# ── Actions ────────────────────────────────────────────────────────────────────
+
+
+# CHQ: Claude AI updated to allow searching by specific properties
+def action_search(db):
+    # Step 1: fetch real properties from Notion
+    click.echo("\n⏳ Loading database properties...")
+    try:
+        result = get_database_schema(db["id"])
+        props = result.get("properties", {})
+    except Exception as e:
+        click.echo(f"❌ Could not load properties: {e}")
         return
+
+    search_fields = set_search_fields(props)
 
     # Step 2: pick search field
     click.echo("\n🔎 Search by:\n")
@@ -377,26 +445,7 @@ def action_search(db):
     ptype = field["type"]
     prop_name = field["label"]
 
-    if ptype == "title":
-        db_filter = {"property": prop_name, "title": {"contains": query}}
-    elif ptype == "rich_text":
-        db_filter = {"property": prop_name, "rich_text": {"contains": query}}
-    elif ptype == "multi_select":
-        db_filter = {"property": prop_name, "multi_select": {"contains": query}}
-    elif ptype == "select":
-        db_filter = {"property": prop_name, "select": {"equals": query}}
-    elif ptype == "number":
-        try:
-            db_filter = {"property": prop_name, "number": {"equals": float(query)}}
-        except ValueError:
-            click.echo("❌ Invalid number.")
-            return
-    elif ptype in ("email", "phone_number", "url"):
-        db_filter = {"property": prop_name, ptype: {"contains": query}}
-    else:
-        click.echo(f"⚠️ Unsupported filter type: {ptype}")
-        return
-
+    db_filter = set_db_filters()
     # Step 4: query the database
     try:
         results = notion.databases.query(database_id=db["id"], filter=db_filter)
@@ -416,20 +465,7 @@ def action_search(db):
         return
 
     click.echo(f"\nFound {len(pages)} result(s):\n")
-    page = pick_from_list(
-        pages,
-        label_fn=lambda p: get_page_title(p),
-        key_list=KEYS_EXPANDED,
-        url_fn=lambda p: p.get("url"),
-        prompt="Press a key to open a page, or any other key to go back: ",
-    )
-    if page:
-        read_page(page["id"])
-    else:
-        click.echo("No page selected.")
-
-
-# ── Command menu ───────────────────────────────────────────────────────────────
+    browse_pages(pages)
 
 
 # CHQ: Gemini AI made this to target folders at any depth
@@ -613,6 +649,9 @@ def action_search_multi_tags(db):
         notion_filter = {"and": filters}
 
     try:
+        debug(f"tags_property = {tags_property}")
+        debug(f"title_prop = {title_prop}")
+        debug(json.dumps(notion_filter, indent=2))
         response = notion.databases.query(database_id=db["id"], filter=notion_filter)
         results = response.get("results", [])[: len(KEYS_EXPANDED)]
 
@@ -621,17 +660,8 @@ def action_search_multi_tags(db):
             return
 
         click.echo(f"\nFound {len(results)} result(s):")
-        selected_page = pick_from_list(
-            results,
-            label_fn=lambda page: get_page_title(page),
-            key_list=KEYS_EXPANDED,
-            url_fn=lambda page: page.get("url"),
-            prompt="Select a page to read, or any other key to go back: ",
-        )
-
-        if selected_page:
-            read_page(selected_page["id"])
-
+        browse_pages(results)
+        
     except Exception as error:
         click.echo(f"❌ Notion Query Error: {error}")
 
@@ -696,6 +726,9 @@ def action_append(db):
         click.echo(f"\n✅ Appended text to page {page_id}\n")
     except Exception as e:
         click.echo(f"❌ Error: {e}")
+
+
+# ── Command menu ───────────────────────────────────────────────────────────────
 
 
 COMMANDS = [

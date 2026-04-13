@@ -328,6 +328,40 @@ def get_tags_property_name(db):
 
     return prop_name
 
+
+# CHQ: ChatGPT created so CLI UX goes back to search results to
+#      allow additional pages to be read without triggered a
+#      duplicate search
+def browse_pages(pages):
+    """Let user repeatedly open pages from a result list."""
+    if not pages:
+        return
+
+    while True:
+        click.echo("\nSelect a page to read, or any other key to go back:\n")
+
+        selected_page = pick_from_list(
+            pages,
+            label_fn=lambda p: get_page_title(p),
+            key_list=KEYS_EXPANDED,
+            url_fn=lambda p: p.get("url"),
+            prompt="Choice: ",
+        )
+
+        if not selected_page:
+            break
+
+        read_page(selected_page["id"])
+
+        # # Pause before returning to results
+        # click.echo("\n↩ Press any key to return to results...")
+        # readchar.readkey()
+
+        click.echo("\n↩ Press Enter to go back, or SPACEBAR to exit results...")
+        key = readchar.readkey()
+        if key == " ":
+            break
+
 # ── Actions ────────────────────────────────────────────────────────────────────
 
 
@@ -421,17 +455,7 @@ def action_search(db):
         return
 
     click.echo(f"\nFound {len(pages)} result(s):\n")
-    page = pick_from_list(
-        pages,
-        label_fn=lambda p: get_page_title(p),
-        key_list=KEYS_EXPANDED,
-        url_fn=lambda p: p.get("url"),
-        prompt="Press a key to open a page, or any other key to go back: ",
-    )
-    if page:
-        read_page(page["id"])
-    else:
-        click.echo("No page selected.")
+    browse_pages(pages)
 
 
 # CHQ: Gemini AI made this to target folders at any depth
@@ -626,17 +650,8 @@ def action_search_multi_tags(db):
             return
 
         click.echo(f"\nFound {len(results)} result(s):")
-        selected_page = pick_from_list(
-            results,
-            label_fn=lambda page: get_page_title(page),
-            key_list=KEYS_EXPANDED,
-            url_fn=lambda page: page.get("url"),
-            prompt="Select a page to read, or any other key to go back: ",
-        )
-
-        if selected_page:
-            read_page(selected_page["id"])
-
+        browse_pages(results)
+        
     except Exception as error:
         click.echo(f"❌ Notion Query Error: {error}")
 

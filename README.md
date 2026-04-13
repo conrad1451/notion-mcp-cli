@@ -1,3 +1,7 @@
+
+[![Python Linter](https://github.com/conrad1451/animaltrackingetls/actions/workflows/pylint.yml/badge.svg)](https://github.com/conrad1451/animaltrackingetls/actions/workflows/pylint.yml)
+
+
 # notion-pkm-cli
 
 A terminal CLI written in Python for interacting with my Notion Personal Knowledge Management (PKM) system, directly from the command line via the Notion API.

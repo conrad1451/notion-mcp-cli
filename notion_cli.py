@@ -362,20 +362,8 @@ def browse_pages(pages):
         if key == " ":
             break
 
-# ── Actions ────────────────────────────────────────────────────────────────────
 
-
-# CHQ: Claude AI updated to allow searching by specific properties
-def action_search(db):
-    # Step 1: fetch real properties from Notion
-    click.echo("\n⏳ Loading database properties...")
-    try:
-        result = get_database_schema(db["id"])
-        props = result.get("properties", {})
-    except Exception as e:
-        click.echo(f"❌ Could not load properties: {e}")
-        return
-
+def set_search_fields(props):
     # Only include searchable property types
     SEARCHABLE_TYPES = {
         "title",
@@ -396,7 +384,48 @@ def action_search(db):
 
     if not search_fields:
         click.echo("No searchable properties found.")
+        # return
+
+    return search_fields
+
+def set_db_filters():
+    db_filter = {}
+    if ptype == "title":
+        db_filter = {"property": prop_name, "title": {"contains": query}}
+    elif ptype == "rich_text":
+        db_filter = {"property": prop_name, "rich_text": {"contains": query}}
+    elif ptype == "multi_select":
+        db_filter = {"property": prop_name, "multi_select": {"contains": query}}
+    elif ptype == "select":
+        db_filter = {"property": prop_name, "select": {"equals": query}}
+    elif ptype == "number":
+        try:
+            db_filter = {"property": prop_name, "number": {"equals": float(query)}}
+        except ValueError:
+            click.echo("❌ Invalid number.")
+            return
+    elif ptype in ("email", "phone_number", "url"):
+        db_filter = {"property": prop_name, ptype: {"contains": query}}
+    else:
+        click.echo(f"⚠️ Unsupported filter type: {ptype}")
+        # return
+    return db_filter
+
+# ── Actions ────────────────────────────────────────────────────────────────────
+
+
+# CHQ: Claude AI updated to allow searching by specific properties
+def action_search(db):
+    # Step 1: fetch real properties from Notion
+    click.echo("\n⏳ Loading database properties...")
+    try:
+        result = get_database_schema(db["id"])
+        props = result.get("properties", {})
+    except Exception as e:
+        click.echo(f"❌ Could not load properties: {e}")
         return
+
+    search_fields = set_search_fields(props)
 
     # Step 2: pick search field
     click.echo("\n🔎 Search by:\n")
@@ -416,26 +445,7 @@ def action_search(db):
     ptype = field["type"]
     prop_name = field["label"]
 
-    if ptype == "title":
-        db_filter = {"property": prop_name, "title": {"contains": query}}
-    elif ptype == "rich_text":
-        db_filter = {"property": prop_name, "rich_text": {"contains": query}}
-    elif ptype == "multi_select":
-        db_filter = {"property": prop_name, "multi_select": {"contains": query}}
-    elif ptype == "select":
-        db_filter = {"property": prop_name, "select": {"equals": query}}
-    elif ptype == "number":
-        try:
-            db_filter = {"property": prop_name, "number": {"equals": float(query)}}
-        except ValueError:
-            click.echo("❌ Invalid number.")
-            return
-    elif ptype in ("email", "phone_number", "url"):
-        db_filter = {"property": prop_name, ptype: {"contains": query}}
-    else:
-        click.echo(f"⚠️ Unsupported filter type: {ptype}")
-        return
-
+    db_filter = set_db_filters()
     # Step 4: query the database
     try:
         results = notion.databases.query(database_id=db["id"], filter=db_filter)

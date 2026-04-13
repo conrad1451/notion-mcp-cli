@@ -1,5 +1,5 @@
 
-[![Python Linter](https://github.com/conrad1451/animaltrackingetls/actions/workflows/pylint.yml/badge.svg)](https://github.com/conrad1451/animaltrackingetls/actions/workflows/pylint.yml)
+[![Python Linter](https://github.com/conrad1451/notion-pkm-cli/actions/workflows/pylint.yml/badge.svg)](https://github.com/conrad1451/notion-pkm-cli/actions/workflows/pylint.yml)
 
 
 # notion-pkm-cli

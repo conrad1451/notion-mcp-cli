@@ -411,6 +411,39 @@ def set_db_filters():
         # return
     return db_filter
 
+ 
+
+def build_filters(selected_tag_group, excluded_tag_group, tags_property):
+    # Build filter
+    filters = []
+
+    if selected_tag_group:
+        if len(selected_tag_group) == 1:
+            filters.append(
+                {
+                    "property": tags_property,
+                    "multi_select": {"contains": list(selected_tag_group)[0]},
+                }
+            )
+        else:
+            filters.append(
+                {
+                    "and": [
+                        {"property": tags_property, "multi_select": {"contains": tag}}
+                        for tag in selected_tag_group
+                    ]
+                }
+            )
+
+    # Build exclude filters (NOT any of the excluded tags)
+    if excluded_tag_group:
+        for tag in excluded_tag_group:
+            filters.append(
+                {"property": tags_property, "multi_select": {"does_not_contain": tag}}
+            )
+
+    return filters
+      
 # ── Actions ────────────────────────────────────────────────────────────────────
 
 
@@ -609,36 +642,11 @@ def action_search_multi_tags(db):
         click.echo(f"   Title contains: '{title_filter}'")
     click.echo("...")
 
-    # Build filter
-    filters = []
-
     title_prop = get_title_property_name(db["id"])
 
-    # Build include filters (AND all included tags)
-    if selected_tag_group:
-        if len(selected_tag_group) == 1:
-            filters.append(
-                {
-                    "property": tags_property,
-                    "multi_select": {"contains": list(selected_tag_group)[0]},
-                }
-            )
-        else:
-            filters.append(
-                {
-                    "and": [
-                        {"property": tags_property, "multi_select": {"contains": tag}}
-                        for tag in selected_tag_group
-                    ]
-                }
-            )
+    # Build filter
+    filters = build_filters(selected_tag_group, excluded_tag_group, tags_property)
 
-    # Build exclude filters (NOT any of the excluded tags)
-    if excluded_tag_group:
-        for tag in excluded_tag_group:
-            filters.append(
-                {"property": tags_property, "multi_select": {"does_not_contain": tag}}
-            )
 
     # CHQ: ChatGPT fixed title filter bug
     if title_filter:

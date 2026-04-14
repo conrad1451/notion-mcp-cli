@@ -4,4 +4,6 @@ __pycache__/
 *.pyc
 databases.json 
 database_metadata/
+old_database_metadata/
 listoftagnames.txt
+tools/flat_lists

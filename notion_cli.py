@@ -445,7 +445,7 @@ def build_filters(selected_tag_group, excluded_tag_group, tags_property):
     return filters
       
 
-
+# CHQ: Claude AI made helper function
 def load_tag_hierarchy(db):
     """Load and parse the tag hierarchy file."""
     try:
@@ -462,6 +462,7 @@ def load_tag_hierarchy(db):
         return None
 
 
+# CHQ: Claude AI made helper function
 def get_tags_property_name_safe(db):
     """Safely retrieve tags property name with error handling."""
     try:
@@ -470,6 +471,7 @@ def get_tags_property_name_safe(db):
         click.echo(f"❌ Could not find tags property: {e}")
         return None
 
+# CHQ: Claude AI made helper function
 def run_selection_loop(tag_hierarchy):
     """Main loop for user to select tags and filters."""
     selected_tag_group = set()
@@ -501,7 +503,7 @@ def run_selection_loop(tag_hierarchy):
     
     return selected_tag_group, excluded_tag_group, title_filter
 
-
+# CHQ: Claude AI made helper function
 def show_basket_menu(selected_tag_group, excluded_tag_group, title_filter):
     """Display current selection and return user's chosen action."""
     if selected_tag_group or excluded_tag_group or title_filter:
@@ -535,6 +537,7 @@ def show_basket_menu(selected_tag_group, excluded_tag_group, title_filter):
         return "continue"
 
 
+# CHQ: Claude AI made helper function
 def get_title_filter_from_user():
     """Prompt user for title filter."""
     return click.prompt(
@@ -542,6 +545,7 @@ def get_title_filter_from_user():
     )
 
 
+# CHQ: Claude AI made helper function
 def navigate_and_select_tags(tag_hierarchy, selected_tag_group, 
                              excluded_tag_group):
     """Navigate the tag hierarchy and allow user to select tags."""
@@ -582,6 +586,7 @@ def navigate_and_select_tags(tag_hierarchy, selected_tag_group,
     else:
         click.echo("⚠️ Expected a list of tags but found something else.")
 
+# CHQ: Claude AI made helper function
 def perform_notion_search(db, selected_tag_group, excluded_tag_group, 
                          title_filter, tags_property):
     """Execute the Notion database query and display results."""
@@ -615,6 +620,7 @@ def perform_notion_search(db, selected_tag_group, excluded_tag_group,
         click.echo(f"❌ Notion Query Error: {error}")
 
 
+# CHQ: Claude AI made helper function
 def log_search_params(selected_tag_group, excluded_tag_group, title_filter):
     """Log search parameters to user."""
     tags_list = list(selected_tag_group)
@@ -630,6 +636,7 @@ def log_search_params(selected_tag_group, excluded_tag_group, title_filter):
     click.echo("...")
 
 
+# CHQ: Claude AI made helper function
 def build_notion_filter(selected_tag_group, excluded_tag_group, title_filter, 
                        tags_property, title_prop):
     """Construct the Notion API filter object."""

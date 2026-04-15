@@ -479,7 +479,7 @@ def run_selection_loop(tag_hierarchy):
     title_filter = ""
     
     while True:
-        action = show_basket_menu(selected_tag_group, excluded_tag_group, 
+        action = show_basket_menu(tag_hierarchy, selected_tag_group, excluded_tag_group, 
                                   title_filter)
         
         if action == "cancel":
@@ -504,37 +504,39 @@ def run_selection_loop(tag_hierarchy):
     return selected_tag_group, excluded_tag_group, title_filter
 
 # CHQ: Claude AI made helper function
-def show_basket_menu(selected_tag_group, excluded_tag_group, title_filter):
+def show_basket_menu(tag_hierarchy, selected_tag_group, excluded_tag_group, title_filter):
     """Display current selection and return user's chosen action."""
-    if selected_tag_group or excluded_tag_group or title_filter:
-        click.echo("\n🛒 Current Selection Basket:")
-        
-        include_text = ", ".join(sorted(selected_tag_group)) if selected_tag_group else "none"
-        click.echo(f"  ✓ Include: {include_text}")
-        
-        exclude_text = ", ".join(sorted(excluded_tag_group)) if excluded_tag_group else "none"
-        click.echo(f"  ✗ Exclude: {exclude_text}")
-        
-        if title_filter:
-            click.echo(f"  🔤 Title contains: '{title_filter}'")
-        
-        options = [
-            {"label": "Search Notion with these tags", "action": "search"},
-            {"label": "Add more tags from another category", "action": "continue"},
-            {"label": "Add/change title filter", "action": "title"},
-            {"label": "Toggle include/exclude for selected tags", "action": "toggle"},
-            {"label": "Clear all and start over", "action": "clear"},
-            {"label": "Cancel and go back", "action": "cancel"},
-        ]
-        click.echo("\n--- What would you like to do? ---")
-        selected_option = pick_from_list(
-            options, label_fn=lambda o: o["label"], key_list="123456"
-        )
-        
-        return selected_option["action"] if selected_option else "cancel"
-    else:
-        navigate_and_select_tags(tag_hierarchy := None, {}, {})
+    # If nothing is selected, don't show the menu, just go straight to browsing
+    if not (selected_tag_group or excluded_tag_group or title_filter):
         return "continue"
+
+    click.echo("\n" + "─" * 40)
+    click.echo("🛒 Current Selection Basket:")
+    
+    include_text = ", ".join(sorted(selected_tag_group)) if selected_tag_group else "none"
+    click.echo(f"  ✓ Include: {include_text}")
+    
+    exclude_text = ", ".join(sorted(excluded_tag_group)) if excluded_tag_group else "none"
+    click.echo(f"  ✗ Exclude: {exclude_text}")
+    
+    if title_filter:
+        click.echo(f"  🔤 Title contains: '{title_filter}'")
+    
+    options = [
+        {"label": "🚀 Search Notion now", "action": "search"},
+        {"label": "📂 Browse tags / Add more", "action": "continue"},
+        {"label": "🔤 Set/Change title filter", "action": "title"},
+        {"label": "🔄 Toggle Include/Exclude status", "action": "toggle"},
+        {"label": "🗑️  Clear all", "action": "clear"},
+        {"label": "⬅️  Cancel and go back", "action": "cancel"},
+    ]
+
+    click.echo("\n--- What would you like to do? ---")
+    selected_option = pick_from_list(
+        options, label_fn=lambda o: o["label"], key_list="123456"
+    )
+    
+    return selected_option["action"] if selected_option else "cancel"
 
 
 # CHQ: Claude AI made helper function
@@ -546,45 +548,47 @@ def get_title_filter_from_user():
 
 
 # CHQ: Claude AI made helper function
-def navigate_and_select_tags(tag_hierarchy, selected_tag_group, 
-                             excluded_tag_group):
-    """Navigate the tag hierarchy and allow user to select tags."""
-    current_level_data = tag_hierarchy
-    current_path = []
+# Gemini AI added tag_heirarchy as parameter
+def navigate_and_select_tags(tag_hierarchy, selected_tag_group, excluded_tag_group):
+    """Navigate the tag hierarchy with folder persistence."""
+    # Use a stack to keep track of folder levels so 'Back' works properly
+    history = [(tag_hierarchy, "Root")]
     
-    # Navigate through nested structure
-    while isinstance(current_level_data, dict):
-        options = list(current_level_data.keys())
-        path_str = " > ".join(current_path) if current_path else "Root"
-        click.echo(f"\n📂 Location: {path_str}")
+    while history:
+        current_data, folder_name = history[-1]
         
-        selected_key = pick_from_list(
-            options,
-            label_fn=lambda x: x,
-            key_list=KEYS_EXPANDED,
-            prompt="Select a category/folder (or any other key to go back): ",
-        )
+        if isinstance(current_data, dict):
+            options = list(current_data.keys())
+            click.echo(f"\n📂 Location: {folder_name}")
+            
+            selected_key = pick_from_list(
+                options,
+                label_fn=lambda x: f"[{x}]",
+                key_list=KEYS_EXPANDED,
+                prompt="Select a category (or any other key to go UP): ",
+            )
+            
+            if selected_key:
+                history.append((current_data[selected_key], selected_key))
+            else:
+                history.pop() # Go up one level
         
-        if not selected_key:
-            return  # User backed out
-        
-        current_path.append(selected_key)
-        current_level_data = current_level_data[selected_key]
-    
-    # Select from final tag list
-    if isinstance(current_level_data, list):
-        selected_tags = pick_multi_from_list(
-            current_level_data,
-            label_fn=lambda t: t,
-            key_list=KEYS_EXPANDED,
-            prompt="Press item keys to toggle, Enter to confirm: ",
-        )
-        
-        if selected_tags:
-            selected_tag_group.update(selected_tags)
-            excluded_tag_group.difference_update(selected_tags)
-    else:
-        click.echo("⚠️ Expected a list of tags but found something else.")
+        elif isinstance(current_data, list):
+            selected_tags = pick_multi_from_list(
+                current_data,
+                label_fn=lambda t: t,
+                key_list=KEYS_EXPANDED,
+            )
+            if selected_tags:
+                selected_tag_group.update(selected_tags)
+                excluded_tag_group.difference_update(selected_tags)
+            
+            history.pop() # Return to the parent folder after selection
+            
+        if not history:
+            break
+
+
 
 # CHQ: Claude AI made helper function
 def perform_notion_search(db, selected_tag_group, excluded_tag_group, 

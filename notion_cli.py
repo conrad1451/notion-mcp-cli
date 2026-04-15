@@ -444,6 +444,219 @@ def build_filters(selected_tag_group, excluded_tag_group, tags_property):
 
     return filters
       
+
+# CHQ: Claude AI made helper function
+def load_tag_hierarchy(db):
+    """Load and parse the tag hierarchy file."""
+    try:
+        tag_file = db.get("tag_file")
+        if not tag_file:
+            click.echo("❌ No tag file configured for this database.")
+            return None
+        
+        tag_file_path = os.path.join(os.path.dirname(__file__), tag_file)
+        with open(tag_file_path, "r") as f:
+            return json.load(f)
+    except Exception as e:
+        click.echo(f"❌ Could not load tag_categories.json: {e}")
+        return None
+
+
+# CHQ: Claude AI made helper function
+def get_tags_property_name_safe(db):
+    """Safely retrieve tags property name with error handling."""
+    try:
+        return get_tags_property_name(db)
+    except Exception as e:
+        click.echo(f"❌ Could not find tags property: {e}")
+        return None
+
+# CHQ: Claude AI made helper function
+def run_selection_loop(tag_hierarchy):
+    """Main loop for user to select tags and filters."""
+    selected_tag_group = set()
+    excluded_tag_group = set()
+    title_filter = ""
+    
+    while True:
+        action = show_basket_menu(tag_hierarchy, selected_tag_group, excluded_tag_group, 
+                                  title_filter)
+        
+        if action == "cancel":
+            return set(), set(), ""
+        if action == "clear":
+            selected_tag_group.clear()
+            excluded_tag_group.clear()
+            title_filter = ""
+            continue
+        if action == "title":
+            title_filter = get_title_filter_from_user()
+            continue
+        if action == "toggle":
+            toggle_tag_inclusion(selected_tag_group, excluded_tag_group)
+            continue
+        if action == "search":
+            break
+        if action == "continue":
+            navigate_and_select_tags(tag_hierarchy, selected_tag_group, 
+                                    excluded_tag_group)
+    
+    return selected_tag_group, excluded_tag_group, title_filter
+
+# CHQ: Claude AI made helper function
+def show_basket_menu(tag_hierarchy, selected_tag_group, excluded_tag_group, title_filter):
+    """Display current selection and return user's chosen action."""
+    # If nothing is selected, don't show the menu, just go straight to browsing
+    if not (selected_tag_group or excluded_tag_group or title_filter):
+        return "continue"
+
+    click.echo("\n" + "─" * 40)
+    click.echo("🛒 Current Selection Basket:")
+    
+    include_text = ", ".join(sorted(selected_tag_group)) if selected_tag_group else "none"
+    click.echo(f"  ✓ Include: {include_text}")
+    
+    exclude_text = ", ".join(sorted(excluded_tag_group)) if excluded_tag_group else "none"
+    click.echo(f"  ✗ Exclude: {exclude_text}")
+    
+    if title_filter:
+        click.echo(f"  🔤 Title contains: '{title_filter}'")
+    
+    options = [
+        {"label": "🚀 Search Notion now", "action": "search"},
+        {"label": "📂 Browse tags / Add more", "action": "continue"},
+        {"label": "🔤 Set/Change title filter", "action": "title"},
+        {"label": "🔄 Toggle Include/Exclude status", "action": "toggle"},
+        {"label": "🗑️  Clear all", "action": "clear"},
+        {"label": "⬅️  Cancel and go back", "action": "cancel"},
+    ]
+
+    click.echo("\n--- What would you like to do? ---")
+    selected_option = pick_from_list(
+        options, label_fn=lambda o: o["label"], key_list="123456"
+    )
+    
+    return selected_option["action"] if selected_option else "cancel"
+
+
+# CHQ: Claude AI made helper function
+def get_title_filter_from_user():
+    """Prompt user for title filter."""
+    return click.prompt(
+        "\n🔤 Enter title to search for (or press Enter to clear)"
+    )
+
+
+# CHQ: Claude AI made helper function
+# Gemini AI added tag_heirarchy as parameter
+def navigate_and_select_tags(tag_hierarchy, selected_tag_group, excluded_tag_group):
+    """Navigate the tag hierarchy with folder persistence."""
+    # Use a stack to keep track of folder levels so 'Back' works properly
+    history = [(tag_hierarchy, "Root")]
+    
+    while history:
+        current_data, folder_name = history[-1]
+        
+        if isinstance(current_data, dict):
+            options = list(current_data.keys())
+            click.echo(f"\n📂 Location: {folder_name}")
+            
+            selected_key = pick_from_list(
+                options,
+                label_fn=lambda x: f"[{x}]",
+                key_list=KEYS_EXPANDED,
+                prompt="Select a category (or any other key to go UP): ",
+            )
+            
+            if selected_key:
+                history.append((current_data[selected_key], selected_key))
+            else:
+                history.pop() # Go up one level
+        
+        elif isinstance(current_data, list):
+            selected_tags = pick_multi_from_list(
+                current_data,
+                label_fn=lambda t: t,
+                key_list=KEYS_EXPANDED,
+            )
+            if selected_tags:
+                selected_tag_group.update(selected_tags)
+                excluded_tag_group.difference_update(selected_tags)
+            
+            history.pop() # Return to the parent folder after selection
+            
+        if not history:
+            break
+
+
+
+# CHQ: Claude AI made helper function
+def perform_notion_search(db, selected_tag_group, excluded_tag_group, 
+                         title_filter, tags_property):
+    """Execute the Notion database query and display results."""
+    if not selected_tag_group and not title_filter:
+        click.echo("No tags or title selected.")
+        return
+    
+    log_search_params(selected_tag_group, excluded_tag_group, title_filter)
+    
+    title_prop = get_title_property_name(db["id"])
+    notion_filter = build_notion_filter(selected_tag_group, excluded_tag_group, 
+                                       title_filter, tags_property, title_prop)
+    
+    try:
+        debug(f"tags_property = {tags_property}")
+        debug(f"title_prop = {title_prop}")
+        debug(json.dumps(notion_filter, indent=2))
+        
+        response = notion.databases.query(database_id=db["id"], 
+                                         filter=notion_filter)
+        results = response.get("results", [])[:len(KEYS_EXPANDED)]
+        
+        if not results:
+            click.echo("\nNo pages found matching your criteria.")
+            return
+        
+        click.echo(f"\nFound {len(results)} result(s):")
+        browse_pages(results)
+        
+    except Exception as error:
+        click.echo(f"❌ Notion Query Error: {error}")
+
+
+# CHQ: Claude AI made helper function
+def log_search_params(selected_tag_group, excluded_tag_group, title_filter):
+    """Log search parameters to user."""
+    tags_list = list(selected_tag_group)
+    click.echo(f"\n🔎 Searching Notion for: {', '.join(tags_list)}")
+    
+    if selected_tag_group:
+        click.echo(f"   Include tags: {', '.join(selected_tag_group)}")
+    if excluded_tag_group:
+        click.echo(f"   Excluded tags: {', '.join(excluded_tag_group)}")
+    if title_filter:
+        click.echo(f"   Title contains: '{title_filter}'")
+    
+    click.echo("...")
+
+
+# CHQ: Claude AI made helper function
+def build_notion_filter(selected_tag_group, excluded_tag_group, title_filter, 
+                       tags_property, title_prop):
+    """Construct the Notion API filter object."""
+    filters = build_filters(selected_tag_group, excluded_tag_group, tags_property)
+    
+    if title_filter:
+        filters.append({
+            "property": title_prop,
+            "title": {"contains": title_filter}
+        })
+    
+    if len(filters) == 1:
+        return filters[0]
+    else:
+        return {"and": filters}
+
 # ── Actions ────────────────────────────────────────────────────────────────────
 
 
@@ -503,175 +716,25 @@ def action_search(db):
 
 # CHQ: Gemini AI made this to target folders at any depth
 def action_search_multi_tags(db):
-    # 0. Load the local tag category file
-    try:
-        tag_file = db.get("tag_file")
-        if not tag_file:
-            click.echo("❌ No tag file configured for this database.")
-            return
-        tag_file_path = os.path.join(os.path.dirname(__file__), tag_file)
-
-        with open(tag_file_path, "r") as f:
-            tag_hierarchy = json.load(f)
-    except Exception as e:
-        click.echo(f"❌ Could not load tag_categories.json: {e}")
+    """Main entry point for multi-tag search."""
+    # Load configuration
+    tag_hierarchy = load_tag_hierarchy(db)
+    if not tag_hierarchy:
         return
-
-    # CHQ: ChatGPT fixed bug of missing tags_property
-    try:
-        tags_property = get_tags_property_name(db)
-    except Exception as e:
-        click.echo(f"❌ Could not find tags property: {e}")
+    
+    tags_property = get_tags_property_name_safe(db)
+    if not tags_property:
         return
-
-    selected_tag_group = set()
-    excluded_tag_group = set()  # CHQ: added by ClaudeAI
-    title_filter = ""
-
-    while True:
-        if selected_tag_group or excluded_tag_group:
-            click.echo("\n🛒 Current Selection Basket:")
-
-            if selected_tag_group:
-                click.echo(f"  ✓ Include: {', '.join(sorted(selected_tag_group))}")
-            else:
-                click.echo("  ✓ Include: none")
-
-            if excluded_tag_group:
-                click.echo(f"  ✗ Exclude: {', '.join(sorted(excluded_tag_group))}")
-            else:
-                click.echo("  ✗ Exclude: none")
-
-            if title_filter:
-                click.echo(f"  🔤 Title contains: '{title_filter}'")
-
-            options = [
-                {"label": "Search Notion with these tags", "action": "search"},
-                {"label": "Add more tags from another category", "action": "continue"},
-                {"label": "Add/change title filter", "action": "title"},
-                {
-                    "label": "Toggle include/exclude for selected tags",
-                    "action": "toggle",
-                },
-                {"label": "Clear all and start over", "action": "clear"},
-                {"label": "Cancel and go back", "action": "cancel"},
-            ]
-            click.echo("\n--- What would you like to do? ---")
-            selected_option = pick_from_list(
-                options, label_fn=lambda o: o["label"], key_list="123456"
-            )
-
-            if not selected_option or selected_option["action"] == "cancel":
-                return
-            if selected_option["action"] == "clear":
-                selected_tag_group.clear()
-                excluded_tag_group.clear()
-                title_filter = ""
-                continue
-            if selected_option["action"] == "title":
-                title_filter = click.prompt(
-                    "\n🔤 Enter title to search for (or press Enter to clear)"
-                )
-                continue
-            if selected_option["action"] == "toggle":
-                toggle_tag_inclusion(selected_tag_group, excluded_tag_group)
-                continue
-            if selected_option["action"] == "search":
-                break
-
-        current_level_data = tag_hierarchy
-        current_path = []
-
-        # Keep asking the user to pick a sub-folder as long as the data is a dictionary
-        while isinstance(current_level_data, dict):
-            options = list(current_level_data.keys())
-
-            # Show the user where they are in the folder structure
-            path_str = " > ".join(current_path) if current_path else "Root"
-            click.echo(f"\n📂 Location: {path_str}")
-
-            selected_key = pick_from_list(
-                options,
-                label_fn=lambda x: x,
-                key_list=KEYS_EXPANDED,
-                prompt="Select a category/folder (or any other key to go back): ",
-            )
-
-            if not selected_key:
-                # This breaks the "dive" and goes back to the main basket menu
-                current_level_data = None
-                break
-
-            # Move deeper into the dictionary
-            current_path.append(selected_key)
-            current_level_data = current_level_data[selected_key]
-
-        # If the user backed out, restart the main loop
-        if current_level_data is None:
-            continue
-
-        # 3. SELECT TAGS
-        # At this point, current_level_data MUST be a list
-        if isinstance(current_level_data, list):
-            selected_tags_from_list = pick_multi_from_list(
-                current_level_data,
-                label_fn=lambda t: t,
-                key_list=KEYS_EXPANDED,
-                prompt="Press item keys to toggle, Enter to confirm: ",
-            )
-
-            if selected_tags_from_list:
-                selected_tag_group.update(selected_tags_from_list)
-                # CHQ: Claude AI: remove from excluded list if added beforehand
-                excluded_tag_group.difference_update(selected_tags_from_list)
-        else:
-            click.echo("⚠️ Expected a list of tags but found something else.")
-
-    # 4. PERFORM THE ACTUAL NOTION SEARCH
-    if not selected_tag_group and not title_filter:
-        click.echo("No tags or title selected.")
-        return
-
-    tags_list = list(selected_tag_group)
-    click.echo(f"\n🔎 Searching Notion for: {', '.join(tags_list)}")
-    if selected_tag_group:
-        click.echo(f"   Include tags: {', '.join(selected_tag_group)}")
-    if excluded_tag_group:
-        click.echo(f"   Excluded tags: {', '.join(excluded_tag_group)}")
-    if title_filter:
-        click.echo(f"   Title contains: '{title_filter}'")
-    click.echo("...")
-
-    title_prop = get_title_property_name(db["id"])
-
-    # Build filter
-    filters = build_filters(selected_tag_group, excluded_tag_group, tags_property)
-
-
-    # CHQ: ChatGPT fixed title filter bug
-    if title_filter:
-        filters.append({"property": title_prop, "title": {"contains": title_filter}})
-    if len(filters) == 1:
-        notion_filter = filters[0]
-    else:
-        notion_filter = {"and": filters}
-
-    try:
-        debug(f"tags_property = {tags_property}")
-        debug(f"title_prop = {title_prop}")
-        debug(json.dumps(notion_filter, indent=2))
-        response = notion.databases.query(database_id=db["id"], filter=notion_filter)
-        results = response.get("results", [])[: len(KEYS_EXPANDED)]
-
-        if not results:
-            click.echo("\nNo pages found matching your criteria.")
-            return
-
-        click.echo(f"\nFound {len(results)} result(s):")
-        browse_pages(results)
-        
-    except Exception as error:
-        click.echo(f"❌ Notion Query Error: {error}")
+    
+    # User selection loop
+    selected_tag_group, excluded_tag_group, title_filter = run_selection_loop(
+        tag_hierarchy
+    )
+    
+    # Perform search if valid
+    if selected_tag_group or title_filter:
+        perform_notion_search(db, selected_tag_group, excluded_tag_group, 
+                            title_filter, tags_property)
 
 
 def action_read(db):

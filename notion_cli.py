@@ -365,7 +365,7 @@ def browse_pages(pages):
 
 def set_search_fields(props):
     # Only include searchable property types
-    SEARCHABLE_TYPES = {
+    searchable_types = {
         "title",
         "multi_select",
         "select",
@@ -379,7 +379,7 @@ def set_search_fields(props):
     search_fields = []
     for name, prop in props.items():
         ptype = prop.get("type")
-        if ptype in SEARCHABLE_TYPES:
+        if ptype in searchable_types:
             search_fields.append({"label": name, "type": ptype})
 
     if not search_fields:
@@ -388,7 +388,7 @@ def set_search_fields(props):
 
     return search_fields
 
-def set_db_filters():
+def set_db_filters(prop_name, query):
     db_filter = {}
     if ptype == "title":
         db_filter = {"property": prop_name, "title": {"contains": query}}
@@ -455,7 +455,7 @@ def load_tag_hierarchy(db):
             return None
         
         tag_file_path = os.path.join(os.path.dirname(__file__), tag_file)
-        with open(tag_file_path, "r") as f:
+        with open(tag_file_path, "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception as e:
         click.echo(f"❌ Could not load tag_categories.json: {e}")
@@ -691,7 +691,7 @@ def action_search(db):
     ptype = field["type"]
     prop_name = field["label"]
 
-    db_filter = set_db_filters()
+    db_filter = set_db_filters(prop_name, query)
     # Step 4: query the database
     try:
         results = notion.databases.query(database_id=db["id"], filter=db_filter)

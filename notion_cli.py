@@ -8,6 +8,8 @@ import click
 import readchar
 from notion_client import Client
 from dotenv import load_dotenv
+import shutil
+from typing import List
 
 load_dotenv()
 
@@ -286,23 +288,172 @@ def print_page_properties(page_id, properties):
 def read_page(page_id):
     page = notion.pages.retrieve(page_id=page_id)
     title = get_page_title(page)
-    click.echo(f"\n📄 {title}")
-    click.echo("─" * 50)
-
-    click.echo("Page details: ")
-
+    
     properties = page.get("properties", {})
-    print_page_properties(page_id, properties)
-
-    # click.echo("Page details: ")
-
-    click.echo("─" * 50)
     blocks = notion.blocks.children.list(block_id=page_id)
     content = blocks_to_text(blocks.get("results", []))
-    click.echo(content if content.strip() else "(Page is empty)")
-    click.echo()
+    
+    # Prepare page data
+    page_data = {
+        "page_id": page_id,
+        "title": title,
+        "properties": properties,
+        "content": content if content.strip() else "(Page is empty)"
+    }
+    
+    # Get terminal width for pagination
+    terminal_width = shutil.get_terminal_size().columns
+    
+    # Paginate content
+    pages = paginate_content(page_data["content"], terminal_width - 10)
+    
+    # Display with navigation
+    display_paginated(page_data, pages)
 
 
+def paginate_content(content: str, max_width: int, lines_per_page: int = 20) -> List[str]:
+    """Split content into pages based on line count."""
+    lines = content.split('\n')
+    pages = []
+    current_page = []
+    
+    for line in lines:
+        # Wrap long lines
+        wrapped = wrap_text(line, max_width)
+        current_page.extend(wrapped)
+        
+        if len(current_page) >= lines_per_page:
+            pages.append('\n'.join(current_page[:lines_per_page]))
+            current_page = current_page[lines_per_page:]
+    
+    if current_page:
+        pages.append('\n'.join(current_page))
+    
+    return pages if pages else ["(Page is empty)"]
+
+
+def wrap_text(text: str, max_width: int) -> List[str]:
+    """Wrap text to fit terminal width."""
+    if len(text) <= max_width:
+        return [text]
+    
+    wrapped = []
+    current = ""
+    for word in text.split():
+        if len(current) + len(word) + 1 <= max_width:
+            current += (word + " " if current else word)
+        else:
+            if current:
+                wrapped.append(current)
+            current = word
+    
+    if current:
+        wrapped.append(current)
+    
+    return wrapped
+
+
+def display_paginated(page_data: dict, pages: List[str]):
+    """Display pages with keyboard navigation."""
+    current_page = 0
+    total_pages = len(pages)
+    
+    while True:
+        # Clear screen
+        click.clear()
+        
+        # Display header
+        click.echo(f"\n📄 {page_data['title']}")
+        click.echo("─" * 50)
+        
+        # Display page properties
+        print_page_properties(page_data["page_id"], page_data["properties"])
+        
+        click.echo("─" * 50)
+        
+        # Display current page content
+        click.echo(pages[current_page])
+        
+        # Display footer with navigation info
+        click.echo("\n" + "─" * 50)
+        click.echo(f"Page {current_page + 1}/{total_pages}")
+        
+        if total_pages > 1:
+            nav_text = "Use ← → or A/D to navigate | Q to quit"
+            click.echo(nav_text)
+        else:
+            click.echo("Press Q to quit")
+        
+        # Get user input
+        try:
+            key = get_key_input()
+            
+            if key.lower() == 'q':
+                click.clear()
+                break
+            elif key in ['right', 'd', 'D'] and current_page < total_pages - 1:
+                current_page += 1
+            elif key in ['left', 'a', 'A'] and current_page > 0:
+                current_page -= 1
+            elif key == 'home':
+                current_page = 0
+            elif key == 'end':
+                current_page = total_pages - 1
+        except KeyboardInterrupt:
+            click.clear()
+            break
+
+
+def print_page_properties(page_id, properties):
+    # source: ChatGPT (via Bing)
+    if not properties:
+        click.echo("No properties found for this page.")
+        return
+
+    click.echo(f"Properties for page {page_id}:")
+    for prop_name, prop_data in properties.items():
+        click.echo(f"- {prop_name} ({prop_data.get('type', 'unknown')}):")
+        click.echo(f" {format_property_value(prop_data)}")
+        click.echo()
+
+
+def get_key_input() -> str:
+    """
+    Get keyboard input. Works on Windows, macOS, and Linux.
+    Returns: 'left', 'right', 'a', 'd', 'q', 'home', 'end', or other character
+    """
+    import sys
+    import os
+    
+    if os.name == 'nt':  # Windows
+        import msvcrt
+        key = msvcrt.getch()
+        if key == b'\xe0':  # Special key prefix
+            key = msvcrt.getch()
+            special_keys = {b'M': 'left', b'P': 'right', b'G': 'home', b'O': 'end'}
+            return special_keys.get(key, key.decode('utf-8', errors='ignore').lower())
+        return key.decode('utf-8', errors='ignore').lower()
+    else:  # macOS and Linux
+        import tty
+        import termios
+        
+        fd = sys.stdin.fileno()
+        old_settings = termios.tcgetattr(fd)
+        try:
+            tty.setraw(fd)
+            key = sys.stdin.read(1)
+            
+            # Handle escape sequences for arrow keys
+            if key == '\x1b':
+                next_char = sys.stdin.read(1)
+                if next_char == '[':
+                    arrow = sys.stdin.read(1)
+                    arrows = {'A': 'up', 'B': 'down', 'C': 'right', 'D': 'left'}
+                    return arrows.get(arrow, arrow.lower())
+            
+            return key.lower()
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 # CHQ: Claude AI added function
 def show_db_properties(db):
     try:
@@ -365,7 +516,7 @@ def browse_pages(pages):
 
 def set_search_fields(props):
     # Only include searchable property types
-    searchable_types = {
+    SEARCHABLE_TYPES = {
         "title",
         "multi_select",
         "select",
@@ -379,7 +530,7 @@ def set_search_fields(props):
     search_fields = []
     for name, prop in props.items():
         ptype = prop.get("type")
-        if ptype in searchable_types:
+        if ptype in SEARCHABLE_TYPES:
             search_fields.append({"label": name, "type": ptype})
 
     if not search_fields:
@@ -388,7 +539,7 @@ def set_search_fields(props):
 
     return search_fields
 
-def set_db_filters(prop_name, query):
+def set_db_filters():
     db_filter = {}
     if ptype == "title":
         db_filter = {"property": prop_name, "title": {"contains": query}}
@@ -455,7 +606,7 @@ def load_tag_hierarchy(db):
             return None
         
         tag_file_path = os.path.join(os.path.dirname(__file__), tag_file)
-        with open(tag_file_path, "r", encoding="utf-8") as f:
+        with open(tag_file_path, "r") as f:
             return json.load(f)
     except Exception as e:
         click.echo(f"❌ Could not load tag_categories.json: {e}")
@@ -691,7 +842,7 @@ def action_search(db):
     ptype = field["type"]
     prop_name = field["label"]
 
-    db_filter = set_db_filters(prop_name, query)
+    db_filter = set_db_filters()
     # Step 4: query the database
     try:
         results = notion.databases.query(database_id=db["id"], filter=db_filter)

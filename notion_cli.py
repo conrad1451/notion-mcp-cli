@@ -11,6 +11,14 @@ from dotenv import load_dotenv
 import shutil
 from typing import List
 
+if os.name == 'nt':
+    import msvcrt
+else:
+    import tty
+    import termios
+    
+import sys 
+
 load_dotenv()
 
 token = os.getenv("NOTION_TOKEN")

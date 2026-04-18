@@ -111,7 +111,8 @@ def pick_multi_from_list(
 
     def render():
         # Clear screen and move cursor to top
-        click.echo("\033[2J\033[H", nl=False)
+        # click.echo("\033[2J\033[H", nl=False)
+        click.clear()
         for key, item in key_to_item.items():
             label = label_fn(item)
             marker = "✓" if key in selected_keys else " "

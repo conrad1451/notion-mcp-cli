@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 # CHQ: Claude AI created this file
+# CHQ: Gemini AI added docstrings
 
 import os
 import json
@@ -12,10 +13,10 @@ import shutil
 from typing import List
 
 if os.name == 'nt':
-    import msvcrt
+    import msvcrt # pylint: disable=import-error
 else:
-    import tty
-    import termios
+    import tty # pylint: disable=import-error
+    import termios # pylint: disable=import-error
     
 import sys 
 
@@ -35,10 +36,25 @@ CONFIG_PATH = os.path.join(os.path.dirname(__file__), "databases.json")
 DEBUG = os.getenv("DEBUG", "").lower() in ("1", "true", "yes")
 
 def debug(msg):
+    """
+    Prints a debug message to the console if the DEBUG environment variable is enabled.
+    
+    Args:
+        msg (str): The message to display.
+    """
     if DEBUG:
         click.echo(f"[DEBUG] {msg}")
 
 def load_databases():
+    """
+    Loads database configurations from the local JSON file.
+    
+    Returns:
+        list: A list of database configuration dictionaries.
+    
+    Raises:
+        SystemExit: If the configuration file is missing.
+    """
     if not os.path.exists(CONFIG_PATH):
         click.echo(f"❌ Config file not found: {CONFIG_PATH}")
         raise SystemExit(1)
@@ -49,6 +65,15 @@ def load_databases():
 _DB_SCHEMA_CACHE = {}
 
 def get_database_schema(database_id):
+    """
+    Retrieves and caches the Notion database schema to minimize API calls.
+    
+    Args:
+        database_id (str): The Notion UUID for the database.
+        
+    Returns:
+        dict: The database object metadata from Notion.
+    """
     if database_id not in _DB_SCHEMA_CACHE:
         _DB_SCHEMA_CACHE[database_id] = notion.databases.retrieve(database_id=database_id)
     return _DB_SCHEMA_CACHE[database_id]
@@ -61,7 +86,16 @@ KEYS_EXPANDED = "123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 
 
 def hyperlink(text, url):
-    """Wrap text in a terminal OSC 8 hyperlink."""
+    """
+    Wraps text in terminal-specific OSC 8 escape sequences to create clickable links.
+    
+    Args:
+        text (str): The display text.
+        url (str): The destination URL.
+        
+    Returns:
+        str: The formatted escape string.
+    """
     return f"\033]8;;{url}\033\\{text}\033]8;;\033\\"
 
 
@@ -72,7 +106,19 @@ def pick_from_list(
     url_fn=None,
     prompt="Press a key to select, or any other key to quit: ",
 ):
-    """Display a keyed list and return the selected item, or None."""
+    """
+    Displays a list of items with single-key shortcuts for user selection.
+    
+    Args:
+        items (list): The collection of items to choose from.
+        label_fn (callable): Function to extract a display string from an item.
+        key_list (str): String of characters to use as shortcuts.
+        url_fn (callable, optional): Function to extract a URL for terminal hyperlinking.
+        prompt (str): The input prompt message.
+        
+    Returns:
+        any: The selected item, or None if the user cancels.
+    """
     key_to_item = {}
     for i, item in enumerate(items):
         if i >= len(key_list):
@@ -97,9 +143,21 @@ def pick_multi_from_list(
     items,
     label_fn,
     key_list=KEYS_FEW,
-    url_fn=None,
     prompt="Press item keys to toggle, Enter to confirm: ",
 ):
+    """
+    Provides an interactive multi-select UI with visual checkmarks and toggle logic.
+    
+    Args:
+        items (list): Items to display.
+        label_fn (callable): Function to format the item label.
+        key_list (str): Shortcuts for selection.
+        url_fn (callable, optional): URL extractor for hyperlinks.
+        prompt (str): Interaction instructions.
+        
+    Returns:
+        list: All items selected by the user upon confirmation.
+    """
     key_to_item = {}
     selected_keys = set()
 
@@ -155,8 +213,11 @@ def pick_multi_from_list(
 
 def toggle_tag_inclusion(selected_tag_group, excluded_tag_group):
     """
-    Let the user move tags between Include and Exclude groups.
-    Returns nothing; mutates the sets in place.
+    Interactive utility to move tags between 'Include' and 'Exclude' sets.
+    
+    Args:
+        selected_tag_group (set): Set of tags to be included in search.
+        excluded_tag_group (set): Set of tags to be explicitly filtered out.
     """
     all_tags = sorted(selected_tag_group | excluded_tag_group)
 
@@ -196,10 +257,28 @@ def toggle_tag_inclusion(selected_tag_group, excluded_tag_group):
 
 
 def extract_plain_text(rich_text_list):
+    """
+    Flattens Notion's rich_text array into a single plain-text string.
+    
+    Args:
+        rich_text_list (list): Notion rich_text objects.
+        
+    Returns:
+        str: Concatenated plain text.
+    """
     return "".join(block.get("plain_text", "") for block in rich_text_list)
 
 
 def get_page_title(page):
+    """
+    Locates and extracts the 'title' property from a Notion page object.
+    
+    Args:
+        page (dict): The Notion page object.
+        
+    Returns:
+        str: The plain-text title or 'Untitled'.
+    """
     props = page.get("properties", {})
     for prop in props.values():
         if prop.get("type") == "title":
@@ -208,6 +287,15 @@ def get_page_title(page):
 
 
 def blocks_to_text(blocks):
+    """
+    Converts Notion block objects into Markdown-style terminal text.
+    
+    Args:
+        blocks (list): List of Notion block objects.
+        
+    Returns:
+        str: Formatted string representing the page content.
+    """
     lines = []
     for block in blocks:
         btype = block.get("type")
@@ -238,9 +326,18 @@ def blocks_to_text(blocks):
 
 # CHQ: ChatGPT created function
 def format_property_value(prop_data):
+    """
+    Parses various Notion property types into human-readable strings.
+    
+    Args:
+        prop_data (dict): The specific property data from a page.
+        
+    Returns:
+        str/int/bool: The formatted value based on the property type.
+    """
     type_name = prop_data.get("type")
 
-    val_to_return = None; # CHQ: Gemini AI fixed this
+    val_to_return = None # CHQ: Gemini AI fixed this
 
     if type_name == "rich_text":
         val_to_return = extract_plain_text(prop_data.get("rich_text", []))
@@ -276,6 +373,15 @@ def format_property_value(prop_data):
 
 # CHQ: ChatGPT created function
 def get_title_property_name(database_id):
+    """
+    Identifies which database property is designated as the 'title' type.
+    
+    Args:
+        database_id (str): The database to inspect.
+        
+    Returns:
+        str: The name of the title property.
+    """
     result = get_database_schema(database_id)
     props = result.get("properties", {})
     for name, prop in props.items():
@@ -298,6 +404,12 @@ def print_page_properties(page_id, properties):
 
 
 def read_page(page_id):
+    """
+    Fetches page metadata and content, then triggers the paginated terminal viewer.
+    
+    Args:
+        page_id (str): The UUID of the Notion page.
+    """
     page = notion.pages.retrieve(page_id=page_id)
     title = get_page_title(page)
     
@@ -324,6 +436,17 @@ def read_page(page_id):
 
 
 def paginate_content(content: str, max_width: int, lines_per_page: int = 20) -> List[str]:
+    """
+    Splits a large string into chunks based on terminal line constraints.
+    
+    Args:
+        content (str): The full page text.
+        max_width (int): Character width for wrapping.
+        lines_per_page (int): Maximum lines to display at once.
+        
+    Returns:
+        List[str]: A list of content strings for each page.
+    """
     """Split content into pages based on line count."""
     lines = content.split('\n')
     pages = []
@@ -366,7 +489,13 @@ def wrap_text(text: str, max_width: int) -> List[str]:
 
 
 def display_paginated(page_data: dict, pages: List[str]):
-    """Display pages with keyboard navigation."""
+    """
+    The main UI loop for reading content with arrow-key navigation.
+    
+    Args:
+        page_data (dict): Metadata including title and properties.
+        pages (list): The list of paginated content strings.
+    """
     current_page = 0
     total_pages = len(pages)
     
@@ -431,8 +560,10 @@ def print_page_properties(page_id, properties):
 
 def get_key_input() -> str:
     """
-    Get keyboard input. Works on Windows, macOS, and Linux.
-    Returns: 'left', 'right', 'a', 'd', 'q', 'home', 'end', or other character
+    Cross-platform handler to capture raw keyboard input, including escape sequences.
+    
+    Returns:
+        str: A normalized string representing the key (e.g., 'left', 'q', 'd').
     """
     # import sys
     # import os
@@ -468,6 +599,12 @@ def get_key_input() -> str:
             termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 # CHQ: Claude AI added function
 def show_db_properties(db):
+    """
+    Displays the available property names for the currently selected database.
+    
+    Args:
+        db (dict): The database config object.
+    """
     try:
         result = get_database_schema(db["id"])
         props = result.get("properties", {})
@@ -477,6 +614,15 @@ def show_db_properties(db):
 
 
 def get_tags_property_name(db):
+    """
+    Validates and retrieves the configured 'multi_select' property for tagging.
+    
+    Args:
+        db (dict): The database config object.
+        
+    Returns:
+        str: The property name if valid.
+    """
     prop_name = db.get("tags_property")
     if not prop_name:
         raise ValueError("No tags_property configured for this database")
@@ -496,7 +642,12 @@ def get_tags_property_name(db):
 #      allow additional pages to be read without triggered a
 #      duplicate search
 def browse_pages(pages):
-    """Let user repeatedly open pages from a result list."""
+    """
+    UI loop that allows users to select and read multiple pages from search results.
+    
+    Args:
+        pages (list): List of Notion page objects.
+    """
     if not pages:
         return
 
@@ -527,6 +678,15 @@ def browse_pages(pages):
 
 
 def set_search_fields(props):
+    """
+    Filters database properties to identify those that are searchable via text or value.
+    
+    Args:
+        props (dict): The properties dictionary from a database schema.
+        
+    Returns:
+        list: Searchable fields with their labels and types.
+    """
     # Only include searchable property types
     SEARCHABLE_TYPES = {
         "title",
@@ -578,6 +738,18 @@ def set_db_filters(ptype, prop_name, query):
  
 
 def build_filters(selected_tag_group, excluded_tag_group, tags_property):
+    """
+    Constructs the logic for inclusion and exclusion filters for Notion's API.
+    
+    Args:
+        selected_tag_group (set): Tags to include.
+        excluded_tag_group (set): Tags to exclude.
+        tags_property (str): The name of the property to filter against.
+        
+    Returns:
+        list: A list of Notion filter condition objects.
+    """
+
     # Build filter
     filters = []
 
@@ -611,6 +783,15 @@ def build_filters(selected_tag_group, excluded_tag_group, tags_property):
 
 # CHQ: Claude AI made helper function
 def load_tag_hierarchy(db):
+    """
+    Reads the hierarchical JSON file used for organized tag browsing.
+    
+    Args:
+        db (dict): The database config object.
+        
+    Returns:
+        dict/None: The parsed hierarchy or None if failed.
+    """
     """Load and parse the tag hierarchy file."""
     try:
         tag_file = db.get("tag_file")
@@ -637,6 +818,15 @@ def get_tags_property_name_safe(db):
 
 # CHQ: Claude AI made helper function
 def run_selection_loop(tag_hierarchy):
+    """
+    The 'Shopping Basket' loop where users build their search criteria.
+    
+    Args:
+        tag_hierarchy (dict): The structured tag data.
+        
+    Returns:
+        tuple: (selected_tags, excluded_tags, title_filter_string)
+    """
     """Main loop for user to select tags and filters."""
     selected_tag_group = set()
     excluded_tag_group = set()
@@ -714,7 +904,14 @@ def get_title_filter_from_user():
 # CHQ: Claude AI made helper function
 # Gemini AI added tag_heirarchy as parameter
 def navigate_and_select_tags(tag_hierarchy, selected_tag_group, excluded_tag_group):
-    """Navigate the tag hierarchy with folder persistence."""
+    """
+    Recursive-style navigation through the tag folders to pick items.
+    
+    Args:
+        tag_hierarchy (dict): The hierarchy to navigate.
+        selected_tag_group (set): Set to update with new inclusions.
+        excluded_tag_group (set): Set to update with exclusions.
+    """
     # Use a stack to keep track of folder levels so 'Back' works properly
     history = [(tag_hierarchy, "Root")]
     
@@ -757,7 +954,16 @@ def navigate_and_select_tags(tag_hierarchy, selected_tag_group, excluded_tag_gro
 # CHQ: Claude AI made helper function
 def perform_notion_search(db, selected_tag_group, excluded_tag_group, 
                          title_filter, tags_property):
-    """Execute the Notion database query and display results."""
+    """
+    Compiles all filters and executes the Notion database query.
+    
+    Args:
+        db (dict): Database config.
+        selected_tag_group (set): Tags to include.
+        excluded_tag_group (set): Tags to exclude.
+        title_filter (str): Text to search for in titles.
+        tags_property (str): Property name for tags.
+    """
     if not selected_tag_group and not title_filter:
         click.echo("No tags or title selected.")
         return
@@ -826,6 +1032,8 @@ def build_notion_filter(selected_tag_group, excluded_tag_group, title_filter,
 
 # CHQ: Claude AI updated to allow searching by specific properties
 def action_search(db):
+    """CLI Action: Search a database by a single chosen property."""
+
     # Step 1: fetch real properties from Notion
     click.echo("\n⏳ Loading database properties...")
     try:
@@ -881,7 +1089,7 @@ def action_search(db):
 
 # CHQ: Gemini AI made this to target folders at any depth
 def action_search_multi_tags(db):
-    """Main entry point for multi-tag search."""
+    """CLI Action: Search a database using the hierarchical multi-tag selector."""
     # Load configuration
     tag_hierarchy = load_tag_hierarchy(db)
     if not tag_hierarchy:
@@ -903,6 +1111,8 @@ def action_search_multi_tags(db):
 
 
 def action_read(db):
+    """CLI Action: Read a specific page content using its Notion UUID."""
+
     page_id = click.prompt("\n📄 Enter page ID")
     try:
         read_page(page_id)
@@ -911,6 +1121,8 @@ def action_read(db):
 
 
 def action_create(db):
+    """CLI Action: Create a new page with a title and optional body text."""
+
     title = click.prompt("\n✏️  Page title")
     body = click.prompt("Body text (optional, press Enter to skip)", default="")
     children = []
@@ -944,6 +1156,8 @@ def action_create(db):
 
 
 def action_append(db):
+    """CLI Action: Add a text paragraph to the end of an existing page."""
+
     page_id = click.prompt("\n📎 Enter page ID to append to")
     text = click.prompt("Text to append")
     try:
@@ -982,6 +1196,13 @@ COMMANDS = [
 
 
 def command_menu(db):
+    """
+    Displays the main action menu for a specific database.
+    
+    Args:
+        db (dict): The currently active database config.
+    """
+
     while True:
         click.echo(f"\n📂 Database: {db['name']}")
         show_db_properties(db)  # CHQ: Claude AI added function

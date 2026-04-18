@@ -11,6 +11,14 @@ from dotenv import load_dotenv
 import shutil
 from typing import List
 
+if os.name == 'nt':
+    import msvcrt
+else:
+    import tty
+    import termios
+    
+import sys 
+
 load_dotenv()
 
 token = os.getenv("NOTION_TOKEN")
@@ -103,7 +111,8 @@ def pick_multi_from_list(
 
     def render():
         # Clear screen and move cursor to top
-        click.echo("\033[2J\033[H", nl=False)
+        # click.echo("\033[2J\033[H", nl=False)
+        click.clear()
         for key, item in key_to_item.items():
             label = label_fn(item)
             marker = "✓" if key in selected_keys else " "
@@ -231,36 +240,39 @@ def blocks_to_text(blocks):
 def format_property_value(prop_data):
     type_name = prop_data.get("type")
 
+    val_to_return = None; # CHQ: Gemini AI fixed this
+
     if type_name == "rich_text":
-        return extract_plain_text(prop_data.get("rich_text", []))
+        val_to_return = extract_plain_text(prop_data.get("rich_text", []))
     elif type_name == "title":
-        return extract_plain_text(prop_data.get("title", []))
+        val_to_return = extract_plain_text(prop_data.get("title", []))
     elif type_name == "multi_select":
-        return ", ".join(i.get("name", "") for i in prop_data.get("multi_select", []))
+        val_to_return = ", ".join(i.get("name", "") for i in prop_data.get("multi_select", []))
     elif type_name == "select":
-        return (prop_data.get("select") or {}).get("name")
+        val_to_return = (prop_data.get("select") or {}).get("name")
     elif type_name == "url":
-        return prop_data.get("url")
+        val_to_return = prop_data.get("url") # CHQ: Gemini AI fixed typo
     elif type_name == "number":
-        return prop_data.get("number")
+        val_to_return = prop_data.get("number")
     elif type_name == "checkbox":
-        return prop_data.get("checkbox")
+        val_to_return = prop_data.get("checkbox")
     elif type_name == "date":
-        return prop_data.get("date")
+        val_to_return = prop_data.get("date")
     elif type_name == "email":
-        return prop_data.get("email")
+        val_to_return = prop_data.get("email")
     elif type_name == "phone_number":
-        return prop_data.get("phone_number")
+        val_to_return = prop_data.get("phone_number")
     elif type_name == "status":
-        return (prop_data.get("status") or {}).get("name")
+        val_to_return = (prop_data.get("status") or {}).get("name")
     elif type_name == "created_time":
-        return prop_data.get("created_time")
+        val_to_return = prop_data.get("created_time")
     elif type_name == "last_edited_time":
-        return prop_data.get("last_edited_time")
+        val_to_return = prop_data.get("last_edited_time")
 
     elif type_name == "people":
-        return ", ".join(p.get("name", "Unknown") for p in prop_data.get("people", []))
-     
+        val_to_return = ", ".join(p.get("name", "Unknown") for p in prop_data.get("people", []))
+    
+    return val_to_return
 
 # CHQ: ChatGPT created function
 def get_title_property_name(database_id):
@@ -422,11 +434,11 @@ def get_key_input() -> str:
     Get keyboard input. Works on Windows, macOS, and Linux.
     Returns: 'left', 'right', 'a', 'd', 'q', 'home', 'end', or other character
     """
-    import sys
-    import os
+    # import sys
+    # import os
     
     if os.name == 'nt':  # Windows
-        import msvcrt
+        # import msvcrt
         key = msvcrt.getch()
         if key == b'\xe0':  # Special key prefix
             key = msvcrt.getch()
@@ -434,8 +446,8 @@ def get_key_input() -> str:
             return special_keys.get(key, key.decode('utf-8', errors='ignore').lower())
         return key.decode('utf-8', errors='ignore').lower()
     else:  # macOS and Linux
-        import tty
-        import termios
+        # import tty
+        # import termios
         
         fd = sys.stdin.fileno()
         old_settings = termios.tcgetattr(fd)
@@ -539,7 +551,8 @@ def set_search_fields(props):
 
     return search_fields
 
-def set_db_filters():
+# CHQ: Gemini AI corrected signature of function
+def set_db_filters(ptype, prop_name, query):
     db_filter = {}
     if ptype == "title":
         db_filter = {"property": prop_name, "title": {"contains": query}}
@@ -842,7 +855,8 @@ def action_search(db):
     ptype = field["type"]
     prop_name = field["label"]
 
-    db_filter = set_db_filters()
+    # CHQ: Gemini AI corrected function call to include arguments
+    db_filter = set_db_filters(ptype, prop_name, query)
     # Step 4: query the database
     try:
         results = notion.databases.query(database_id=db["id"], filter=db_filter)

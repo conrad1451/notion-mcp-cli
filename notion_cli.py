@@ -268,24 +268,6 @@ def extract_plain_text(rich_text_list):
     """
     return "".join(block.get("plain_text", "") for block in rich_text_list)
 
-
-def get_page_title(page):
-    """
-    Locates and extracts the 'title' property from a Notion page object.
-    
-    Args:
-        page (dict): The Notion page object.
-        
-    Returns:
-        str: The plain-text title or 'Untitled'.
-    """
-    props = page.get("properties", {})
-    for prop in props.values():
-        if prop.get("type") == "title":
-            return extract_plain_text(prop["title"]) or "Untitled"
-    return "Untitled"
-
-
 def blocks_to_text(blocks):
     """
     Converts Notion block objects into Markdown-style terminal text.

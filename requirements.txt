@@ -1,7 +1,6 @@
 click==8.1.7
 notion-client==2.3.0
 python-dotenv==1.0.1
-readchar==4.0.5
 
 # Use 4.0.4 only on modern Python, otherwise fall back to 3.0.0
 readchar==4.0.4; python_version >= "3.10"

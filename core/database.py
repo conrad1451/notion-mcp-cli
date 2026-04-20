@@ -3,10 +3,11 @@ from client import notion, _DB_SCHEMA_CACHE
 
 import click
 
+
 def show_db_properties(db):
     """
     Displays the available property names for the currently selected database.
-    
+
     Args:
         db (dict): The database config object.
     """
@@ -22,10 +23,10 @@ def show_db_properties(db):
 def get_title_property_name(database_id):
     """
     Identifies which database property is designated as the 'title' type.
-    
+
     Args:
         database_id (str): The database to inspect.
-        
+
     Returns:
         str: The name of the title property.
     """
@@ -40,26 +41,27 @@ def get_title_property_name(database_id):
 def get_database_schema(database_id):
     """
     Retrieves and caches the Notion database schema to minimize API calls.
-    
+
     Args:
         database_id (str): The Notion UUID for the database.
-        
+
     Returns:
         dict: The database object metadata from Notion.
     """
     if database_id not in _DB_SCHEMA_CACHE:
-        _DB_SCHEMA_CACHE[database_id] = notion.databases.retrieve(database_id=database_id)
+        _DB_SCHEMA_CACHE[database_id] = notion.databases.retrieve(
+            database_id=database_id
+        )
     return _DB_SCHEMA_CACHE[database_id]
-
 
 
 def get_tags_property_name(db):
     """
     Validates and retrieves the configured 'multi_select' property for tagging.
-    
+
     Args:
         db (dict): The database config object.
-        
+
     Returns:
         str: The property name if valid.
     """
@@ -76,4 +78,3 @@ def get_tags_property_name(db):
         raise ValueError(f"Configured tags_property '{prop_name}' is not multi_select")
 
     return prop_name
-

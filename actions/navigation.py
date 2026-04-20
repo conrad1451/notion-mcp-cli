@@ -37,6 +37,53 @@ from client import KEYS_FEW, KEYS_EXPANDED, load_tag_hierarchy
 #     return prop_name
 
 
+
+
+def toggle_tag_inclusion(selected_tag_group, excluded_tag_group):
+    """
+    Interactive utility to move tags between 'Include' and 'Exclude' sets.
+    
+    Args:
+        selected_tag_group (set): Set of tags to be included in search.
+        excluded_tag_group (set): Set of tags to be explicitly filtered out.
+    """
+    all_tags = sorted(selected_tag_group | excluded_tag_group)
+
+    if not all_tags:
+        click.echo("\n⚠️ No tags selected yet.")
+        return
+
+    click.echo("\n🔄 Toggle tags between Include and Exclude:\n")
+    click.echo("Current status:")
+    for tag in all_tags:
+        status = "✓ Include" if tag in selected_tag_group else "✗ Exclude"
+        click.echo(f"  - {tag}: {status}")
+
+    click.echo()
+    chosen_tags = pick_multi_from_list(
+        all_tags,
+        label_fn=lambda t: (
+            f"{t} [{'INCLUDE' if t in selected_tag_group else 'EXCLUDE'}]"
+        ),
+        key_list=KEYS_EXPANDED,
+        prompt="Select tags to toggle, then press Enter: ",
+    )
+
+    if not chosen_tags:
+        click.echo("No tags toggled.")
+        return
+
+    for tag in chosen_tags:
+        if tag in selected_tag_group:
+            selected_tag_group.remove(tag)
+            excluded_tag_group.add(tag)
+        elif tag in excluded_tag_group:
+            excluded_tag_group.remove(tag)
+            selected_tag_group.add(tag)
+
+    click.echo("\n✅ Updated tag inclusion/exclusion.")
+
+
 # CHQ: Claude AI made helper function
 def show_basket_menu(tag_hierarchy, selected_tag_group, excluded_tag_group, title_filter):
     """Display current selection and return user's chosen action."""
@@ -131,6 +178,15 @@ def navigate_and_select_tags(tag_hierarchy, selected_tag_group, excluded_tag_gro
             
         if not history:
             break
+
+
+# CHQ: Claude AI made helper function
+def get_title_filter_from_user():
+    """Prompt user for title filter."""
+    return click.prompt(
+        "\n🔤 Enter title to search for (or press Enter to clear)"
+    )
+
 
 
 # CHQ: Claude AI made helper function

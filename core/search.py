@@ -52,7 +52,13 @@ def build_filters(selected_tag_group, excluded_tag_group, tags_property):
     return filters
       
 
-def build_notion_filter(selected_tag_group, excluded_tag_group, title_filter, tags_property, title_prop):
+def build_notion_filter(
+    selected_tag_group, 
+    excluded_tag_group, 
+    title_filter, 
+    tags_property, 
+    title_prop
+):
     """Combines tags and title filters into one object."""
     filters = build_filters(selected_tag_group, excluded_tag_group, tags_property)
     if title_filter:

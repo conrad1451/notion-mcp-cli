@@ -3,7 +3,7 @@ import readchar
 import shutil
 
 from typing import List
-from client import notion, DEBUG, KEYS_FEW, KEYS_EXPANDED
+from client import notion, KEYS_FEW, KEYS_EXPANDED
 from utils.keyboard import get_key_input
 
 
@@ -290,15 +290,7 @@ def format_property_value(prop_data):
     return val_to_return
 
 
-def debug(msg):
-    """
-    Prints a debug message to the console if the DEBUG environment variable is enabled.
-
-    Args:
-        msg (str): The message to display.
-    """
-    if DEBUG:
-        click.echo(f"[DEBUG] {msg}")
+################### below or functions that are exported #####################
 
 
 def pick_from_list(

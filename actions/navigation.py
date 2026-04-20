@@ -4,7 +4,7 @@ from utils.keyboard import get_key_input
 from utils.formatting import extract_plain_text, pick_from_list, pick_multi_from_list
 from core.search import build_filters, build_notion_filter, perform_notion_search
 from core.database import get_tags_property_name, get_database_schema
- 
+
 from client import KEYS_FEW, KEYS_EXPANDED, load_tag_hierarchy
 
 # KEYS_FEW = "123456789"
@@ -15,10 +15,10 @@ from client import KEYS_FEW, KEYS_EXPANDED, load_tag_hierarchy
 # def get_tags_property_name(db):
 #     """
 #     Validates and retrieves the configured 'multi_select' property for tagging.
-    
+
 #     Args:
 #         db (dict): The database config object.
-        
+
 #     Returns:
 #         str: The property name if valid.
 #     """
@@ -37,12 +37,10 @@ from client import KEYS_FEW, KEYS_EXPANDED, load_tag_hierarchy
 #     return prop_name
 
 
-
-
 def toggle_tag_inclusion(selected_tag_group, excluded_tag_group):
     """
     Interactive utility to move tags between 'Include' and 'Exclude' sets.
-    
+
     Args:
         selected_tag_group (set): Set of tags to be included in search.
         excluded_tag_group (set): Set of tags to be explicitly filtered out.
@@ -85,7 +83,9 @@ def toggle_tag_inclusion(selected_tag_group, excluded_tag_group):
 
 
 # CHQ: Claude AI made helper function
-def show_basket_menu(tag_hierarchy, selected_tag_group, excluded_tag_group, title_filter):
+def show_basket_menu(
+    tag_hierarchy, selected_tag_group, excluded_tag_group, title_filter
+):
     """Display current selection and return user's chosen action."""
     # If nothing is selected, don't show the menu, just go straight to browsing
     if not (selected_tag_group or excluded_tag_group or title_filter):
@@ -93,16 +93,20 @@ def show_basket_menu(tag_hierarchy, selected_tag_group, excluded_tag_group, titl
 
     click.echo("\n" + "─" * 40)
     click.echo("🛒 Current Selection Basket:")
-    
-    include_text = ", ".join(sorted(selected_tag_group)) if selected_tag_group else "none"
+
+    include_text = (
+        ", ".join(sorted(selected_tag_group)) if selected_tag_group else "none"
+    )
     click.echo(f"  ✓ Include: {include_text}")
-    
-    exclude_text = ", ".join(sorted(excluded_tag_group)) if excluded_tag_group else "none"
+
+    exclude_text = (
+        ", ".join(sorted(excluded_tag_group)) if excluded_tag_group else "none"
+    )
     click.echo(f"  ✗ Exclude: {exclude_text}")
-    
+
     if title_filter:
         click.echo(f"  🔤 Title contains: '{title_filter}'")
-    
+
     options = [
         {"label": "🚀 Search Notion now", "action": "search"},
         {"label": "📂 Browse tags / Add more", "action": "continue"},
@@ -116,9 +120,8 @@ def show_basket_menu(tag_hierarchy, selected_tag_group, excluded_tag_group, titl
     selected_option = pick_from_list(
         options, label_fn=lambda o: o["label"], key_list="123456"
     )
-    
-    return selected_option["action"] if selected_option else "cancel"
 
+    return selected_option["action"] if selected_option else "cancel"
 
 
 # CHQ: Claude AI made helper function
@@ -136,7 +139,7 @@ def get_tags_property_name_safe(db):
 def navigate_and_select_tags(tag_hierarchy, selected_tag_group, excluded_tag_group):
     """
     Recursive-style navigation through the tag folders to pick items.
-    
+
     Args:
         tag_hierarchy (dict): The hierarchy to navigate.
         selected_tag_group (set): Set to update with new inclusions.
@@ -144,26 +147,26 @@ def navigate_and_select_tags(tag_hierarchy, selected_tag_group, excluded_tag_gro
     """
     # Use a stack to keep track of folder levels so 'Back' works properly
     history = [(tag_hierarchy, "Root")]
-    
+
     while history:
         current_data, folder_name = history[-1]
-        
+
         if isinstance(current_data, dict):
             options = list(current_data.keys())
             click.echo(f"\n📂 Location: {folder_name}")
-            
+
             selected_key = pick_from_list(
                 options,
                 label_fn=lambda x: f"[{x}]",
                 key_list=KEYS_EXPANDED,
                 prompt="Select a category (or any other key to go UP): ",
             )
-            
+
             if selected_key:
                 history.append((current_data[selected_key], selected_key))
             else:
-                history.pop() # Go up one level
-        
+                history.pop()  # Go up one level
+
         elif isinstance(current_data, list):
             selected_tags = pick_multi_from_list(
                 current_data,
@@ -173,9 +176,9 @@ def navigate_and_select_tags(tag_hierarchy, selected_tag_group, excluded_tag_gro
             if selected_tags:
                 selected_tag_group.update(selected_tags)
                 excluded_tag_group.difference_update(selected_tags)
-            
-            history.pop() # Return to the parent folder after selection
-            
+
+            history.pop()  # Return to the parent folder after selection
+
         if not history:
             break
 
@@ -183,20 +186,17 @@ def navigate_and_select_tags(tag_hierarchy, selected_tag_group, excluded_tag_gro
 # CHQ: Claude AI made helper function
 def get_title_filter_from_user():
     """Prompt user for title filter."""
-    return click.prompt(
-        "\n🔤 Enter title to search for (or press Enter to clear)"
-    )
-
+    return click.prompt("\n🔤 Enter title to search for (or press Enter to clear)")
 
 
 # CHQ: Claude AI made helper function
 def run_selection_loop(tag_hierarchy):
     """
     The 'Shopping Basket' loop where users build their search criteria.
-    
+
     Args:
         tag_hierarchy (dict): The structured tag data.
-        
+
     Returns:
         tuple: (selected_tags, excluded_tags, title_filter_string)
     """
@@ -204,11 +204,12 @@ def run_selection_loop(tag_hierarchy):
     selected_tag_group = set()
     excluded_tag_group = set()
     title_filter = ""
-    
+
     while True:
-        action = show_basket_menu(tag_hierarchy, selected_tag_group, excluded_tag_group, 
-                                  title_filter)
-        
+        action = show_basket_menu(
+            tag_hierarchy, selected_tag_group, excluded_tag_group, title_filter
+        )
+
         if action == "cancel":
             return set(), set(), ""
         if action == "clear":
@@ -225,10 +226,12 @@ def run_selection_loop(tag_hierarchy):
         if action == "search":
             break
         if action == "continue":
-            navigate_and_select_tags(tag_hierarchy, selected_tag_group, 
-                                    excluded_tag_group)
-    
+            navigate_and_select_tags(
+                tag_hierarchy, selected_tag_group, excluded_tag_group
+            )
+
     return selected_tag_group, excluded_tag_group, title_filter
+
 
 # CHQ: Gemini AI made this to target folders at any depth
 def action_search_multi_tags(db):
@@ -237,18 +240,18 @@ def action_search_multi_tags(db):
     tag_hierarchy = load_tag_hierarchy(db)
     if not tag_hierarchy:
         return
-    
+
     tags_property = get_tags_property_name_safe(db)
     if not tags_property:
         return
-    
+
     # User selection loop
     selected_tag_group, excluded_tag_group, title_filter = run_selection_loop(
         tag_hierarchy
     )
-    
+
     # Perform search if valid
     if selected_tag_group or title_filter:
-        perform_notion_search(db, selected_tag_group, excluded_tag_group, 
-                            title_filter, tags_property)
-
+        perform_notion_search(
+            db, selected_tag_group, excluded_tag_group, title_filter, tags_property
+        )

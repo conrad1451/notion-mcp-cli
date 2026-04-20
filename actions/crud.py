@@ -1,20 +1,26 @@
 from client import KEYS_EXPANDED, load_tag_hierarchy
 from core.database import get_database_schema, get_title_property_name
 from core.search import perform_notion_search
-from actions.navigation import run_selection_loop, get_tags_property_name_safe, pick_from_list
+from actions.navigation import (
+    run_selection_loop,
+    get_tags_property_name_safe,
+    pick_from_list,
+)
 from utils.formatting import browse_pages, read_page
 
 import click
 
-def action_read(db):
+
+def action_read():
+    # def action_read(db):
     """CLI Action: Read a specific page content using its Notion UUID."""
 
+    # click.echo("The database" + db.get("tags_property"))
     page_id = click.prompt("\n📄 Enter page ID")
     try:
         read_page(page_id)
     except Exception as e:
         click.echo(f"❌ Error: {e}")
-
 
 
 def action_create(db):
@@ -123,7 +129,7 @@ def action_search(db):
 
     if len(all_pages) > len(KEYS_EXPANDED):
         click.echo(f"⚠️ Showing first {len(KEYS_EXPANDED)} results only.")
-    
+
     if not pages:
         click.echo(f"\nNo pages found where \"{field['label']}\" contains \"{query}\".")
         return
@@ -139,18 +145,18 @@ def action_search_multi_tags(db):
     tag_hierarchy = load_tag_hierarchy(db)
     if not tag_hierarchy:
         return
-    
+
     tags_property = get_tags_property_name_safe(db)
     if not tags_property:
         return
-    
+
     # User selection loop
     selected_tag_group, excluded_tag_group, title_filter = run_selection_loop(
         tag_hierarchy
     )
-    
+
     # Perform search if valid
     if selected_tag_group or title_filter:
-        perform_notion_search(db, selected_tag_group, excluded_tag_group, 
-                            title_filter, tags_property)
-
+        perform_notion_search(
+            db, selected_tag_group, excluded_tag_group, title_filter, tags_property
+        )

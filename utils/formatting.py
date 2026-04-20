@@ -6,6 +6,7 @@ from typing import List
 from client import notion, DEBUG, KEYS_FEW, KEYS_EXPANDED
 from utils.keyboard import get_key_input
 
+
 def print_page_properties(page_id, properties):
     # source: ChatGPT (via Bing)
     if not properties:
@@ -22,68 +23,67 @@ def print_page_properties(page_id, properties):
 def display_paginated(page_data: dict, pages: List[str]):
     """
     The main UI loop for reading content with arrow-key navigation.
-    
+
     Args:
         page_data (dict): Metadata including title and properties.
         pages (list): The list of paginated content strings.
     """
     current_page = 0
     total_pages = len(pages)
-    
+
     while True:
         # Clear screen
         click.clear()
-        
+
         # Display header
         click.echo(f"\n📄 {page_data['title']}")
         click.echo("─" * 50)
-        
+
         # Display page properties
         print_page_properties(page_data["page_id"], page_data["properties"])
-        
+
         click.echo("─" * 50)
-        
+
         # Display current page content
         click.echo(pages[current_page])
-        
+
         # Display footer with navigation info
         click.echo("\n" + "─" * 50)
         click.echo(f"Page {current_page + 1}/{total_pages}")
-        
+
         if total_pages > 1:
             nav_text = "Use ← → or A/D to navigate | Q to quit"
             click.echo(nav_text)
         else:
             click.echo("Press Q to quit")
-        
+
         # Get user input
         try:
             key = get_key_input()
-            
-            if key.lower() == 'q':
+
+            if key.lower() == "q":
                 click.clear()
                 break
-            elif key in ['right', 'd', 'D'] and current_page < total_pages - 1:
+            elif key in ["right", "d", "D"] and current_page < total_pages - 1:
                 current_page += 1
-            elif key in ['left', 'a', 'A'] and current_page > 0:
+            elif key in ["left", "a", "A"] and current_page > 0:
                 current_page -= 1
-            elif key == 'home':
+            elif key == "home":
                 current_page = 0
-            elif key == 'end':
+            elif key == "end":
                 current_page = total_pages - 1
         except KeyboardInterrupt:
             click.clear()
             break
 
 
-
 def blocks_to_text(blocks):
     """
     Converts Notion block objects into Markdown-style terminal text.
-    
+
     Args:
         blocks (list): List of Notion block objects.
-        
+
     Returns:
         str: Formatted string representing the page content.
     """
@@ -115,115 +115,114 @@ def blocks_to_text(blocks):
     return "\n".join(lines)
 
 
-
 def wrap_text(text: str, max_width: int) -> List[str]:
     """Wrap text to fit terminal width."""
     if len(text) <= max_width:
         return [text]
-    
+
     wrapped = []
     current = ""
     for word in text.split():
         if len(current) + len(word) + 1 <= max_width:
-            current += (word + " " if current else word)
+            current += word + " " if current else word
         else:
             if current:
                 wrapped.append(current)
             current = word
-    
+
     if current:
         wrapped.append(current)
-    
+
     return wrapped
 
 
-
-def paginate_content(content: str, max_width: int, lines_per_page: int = 20) -> List[str]:
+def paginate_content(
+    content: str, max_width: int, lines_per_page: int = 20
+) -> List[str]:
     """
     Splits a large string into chunks based on terminal line constraints.
-    
+
     Args:
         content (str): The full page text.
         max_width (int): Character width for wrapping.
         lines_per_page (int): Maximum lines to display at once.
-        
+
     Returns:
         List[str]: A list of content strings for each page.
     """
     """Split content into pages based on line count."""
-    lines = content.split('\n')
+    lines = content.split("\n")
     pages = []
     current_page = []
-    
+
     for line in lines:
         # Wrap long lines
         wrapped = wrap_text(line, max_width)
         current_page.extend(wrapped)
-        
-        if len(current_page) >= lines_per_page:
-            pages.append('\n'.join(current_page[:lines_per_page]))
-            current_page = current_page[lines_per_page:]
-    
-    if current_page:
-        pages.append('\n'.join(current_page))
-    
-    return pages if pages else ["(Page is empty)"]
 
+        if len(current_page) >= lines_per_page:
+            pages.append("\n".join(current_page[:lines_per_page]))
+            current_page = current_page[lines_per_page:]
+
+    if current_page:
+        pages.append("\n".join(current_page))
+
+    return pages if pages else ["(Page is empty)"]
 
 
 def read_page(page_id):
     """
     Fetches page metadata and content, then triggers the paginated terminal viewer.
-    
+
     Args:
         page_id (str): The UUID of the Notion page.
     """
     page = notion.pages.retrieve(page_id=page_id)
     title = get_page_title(page)
-    
+
     properties = page.get("properties", {})
     blocks = notion.blocks.children.list(block_id=page_id)
     content = blocks_to_text(blocks.get("results", []))
-    
+
     # Prepare page data
     page_data = {
         "page_id": page_id,
         "title": title,
         "properties": properties,
-        "content": content if content.strip() else "(Page is empty)"
+        "content": content if content.strip() else "(Page is empty)",
     }
-    
+
     # Get terminal width for pagination
     terminal_width = shutil.get_terminal_size().columns
-    
+
     # Paginate content
     pages = paginate_content(page_data["content"], terminal_width - 10)
-    
+
     # Display with navigation
     display_paginated(page_data, pages)
-
 
 
 def hyperlink(text, url):
     """
     Wraps text in terminal-specific OSC 8 escape sequences to create clickable links.
-    
+
     Args:
         text (str): The display text.
         url (str): The destination URL.
-        
+
     Returns:
         str: The formatted escape string.
     """
     return f"\033]8;;{url}\033\\{text}\033]8;;\033\\"
 
+
 def get_page_title(page):
     """
     Locates and extracts the 'title' property from a Notion page object.
-    
+
     Args:
         page (dict): The Notion page object.
-        
+
     Returns:
         str: The plain-text title or 'Untitled'.
     """
@@ -238,31 +237,34 @@ def extract_plain_text(rich_text_list):
     """Flattens Notion rich_text objects."""
     return "".join(block.get("plain_text", "") for block in rich_text_list)
 
+
 # CHQ: ChatGPT created function
 def format_property_value(prop_data):
     """
     Parses various Notion property types into human-readable strings.
-    
+
     Args:
         prop_data (dict): The specific property data from a page.
-        
+
     Returns:
         str/int/bool: The formatted value based on the property type.
     """
     type_name = prop_data.get("type")
 
-    val_to_return = None # CHQ: Gemini AI fixed this
+    val_to_return = None  # CHQ: Gemini AI fixed this
 
     if type_name == "rich_text":
         val_to_return = extract_plain_text(prop_data.get("rich_text", []))
     elif type_name == "title":
         val_to_return = extract_plain_text(prop_data.get("title", []))
     elif type_name == "multi_select":
-        val_to_return = ", ".join(i.get("name", "") for i in prop_data.get("multi_select", []))
+        val_to_return = ", ".join(
+            i.get("name", "") for i in prop_data.get("multi_select", [])
+        )
     elif type_name == "select":
         val_to_return = (prop_data.get("select") or {}).get("name")
     elif type_name == "url":
-        val_to_return = prop_data.get("url") # CHQ: Gemini AI fixed typo
+        val_to_return = prop_data.get("url")  # CHQ: Gemini AI fixed typo
     elif type_name == "number":
         val_to_return = prop_data.get("number")
     elif type_name == "checkbox":
@@ -281,21 +283,22 @@ def format_property_value(prop_data):
         val_to_return = prop_data.get("last_edited_time")
 
     elif type_name == "people":
-        val_to_return = ", ".join(p.get("name", "Unknown") for p in prop_data.get("people", []))
-    
+        val_to_return = ", ".join(
+            p.get("name", "Unknown") for p in prop_data.get("people", [])
+        )
+
     return val_to_return
- 
+
 
 def debug(msg):
     """
     Prints a debug message to the console if the DEBUG environment variable is enabled.
-    
+
     Args:
         msg (str): The message to display.
     """
     if DEBUG:
         click.echo(f"[DEBUG] {msg}")
-
 
 
 def pick_from_list(
@@ -307,14 +310,14 @@ def pick_from_list(
 ):
     """
     Displays a list of items with single-key shortcuts for user selection.
-    
+
     Args:
         items (list): The collection of items to choose from.
         label_fn (callable): Function to extract a display string from an item.
         key_list (str): String of characters to use as shortcuts.
         url_fn (callable, optional): Function to extract a URL for terminal hyperlinking.
         prompt (str): The input prompt message.
-        
+
     Returns:
         any: The selected item, or None if the user cancels.
     """
@@ -346,14 +349,14 @@ def pick_multi_from_list(
 ):
     """
     Provides an interactive multi-select UI with visual checkmarks and toggle logic.
-    
+
     Args:
         items (list): Items to display.
         label_fn (callable): Function to format the item label.
         key_list (str): Shortcuts for selection.
         url_fn (callable, optional): URL extractor for hyperlinks.
         prompt (str): Interaction instructions.
-        
+
     Returns:
         list: All items selected by the user upon confirmation.
     """
@@ -410,14 +413,13 @@ def pick_multi_from_list(
         render()
 
 
-
 # CHQ: ChatGPT created so CLI UX goes back to search results to
 #      allow additional pages to be read without triggered a
 #      duplicate search
 def browse_pages(pages):
     """
     UI loop that allows users to select and read multiple pages from search results.
-    
+
     Args:
         pages (list): List of Notion page objects.
     """
@@ -448,4 +450,3 @@ def browse_pages(pages):
         key = readchar.readkey()
         if key == " ":
             break
-

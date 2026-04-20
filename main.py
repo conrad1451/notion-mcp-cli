@@ -42,11 +42,13 @@ def command_menu(db):
         elif cmd["label"] == "Switch database":
             return  # Returns to the database selector in cli()
         else:
-            try:
-                # Execute the assigned function for the command
-                cmd["fn"](db)
-            except Exception as e:
-                click.echo(f"❌ Error executing {cmd['label']}: {e}")
+            # Inside command_menu
+            if cmd["fn"]:
+                try:
+                    cmd["fn"](db)
+                except Exception as e:
+                    click.echo(f"❌ Error executing {cmd['label']}: {e}")
+
 
 @click.command()
 def cli():

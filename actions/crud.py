@@ -6,9 +6,11 @@ from utils.formatting import browse_pages, read_page
 
 import click
 
-def action_read(db):
+def action_read():
+# def action_read(db):
     """CLI Action: Read a specific page content using its Notion UUID."""
 
+    # click.echo("The database" + db.get("tags_property"))
     page_id = click.prompt("\n📄 Enter page ID")
     try:
         read_page(page_id)

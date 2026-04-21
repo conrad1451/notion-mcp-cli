@@ -16,6 +16,7 @@ KEYS_EXPANDED = "123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 
 _DB_SCHEMA_CACHE = {}
 
+
 def load_databases():
     """Loads database configurations from JSON."""
     if not os.path.exists(CONFIG_PATH):
@@ -23,14 +24,15 @@ def load_databases():
     with open(CONFIG_PATH) as f:
         return json.load(f).get("databases", [])
 
+
 # CHQ: Claude AI made helper function
 def load_tag_hierarchy(db):
     """
     Reads the hierarchical JSON file used for organized tag browsing.
-    
+
     Args:
         db (dict): The database config object.
-        
+
     Returns:
         dict/None: The parsed hierarchy or None if failed.
     """
@@ -40,7 +42,7 @@ def load_tag_hierarchy(db):
         if not tag_file:
             click.echo("❌ No tag file configured for this database.")
             return None
-        
+
         tag_file_path = os.path.join(os.path.dirname(__file__), tag_file)
         with open(tag_file_path, "r") as f:
             return json.load(f)

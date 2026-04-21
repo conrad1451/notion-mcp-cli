@@ -2,7 +2,8 @@
 from core.database import get_title_property_name
 from client import notion, KEYS_EXPANDED
 
-from utils.debug import debug, browse_pages
+from utils.debug import debug
+from utils.formatting import browse_pages
 
 import click
 import json

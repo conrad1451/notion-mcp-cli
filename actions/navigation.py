@@ -1,3 +1,4 @@
+# core/navigation.py
 import click
 
 from utils.keyboard import get_key_input

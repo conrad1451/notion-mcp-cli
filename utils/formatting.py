@@ -1,3 +1,4 @@
+# utils/formatting.py
 import click
 import readchar
 import shutil

@@ -1,6 +1,8 @@
 
 [![Python Linter](https://github.com/conrad1451/notion-pkm-cli/actions/workflows/pylint.yml/badge.svg)](https://github.com/conrad1451/notion-pkm-cli/actions/workflows/pylint.yml)
 
+[![Jira Board](https://www.svgrepo.com/show/517161/jira.svg)](https://conraddevtracking.atlassian.net/jira/software/c/projects/NPC/boards/100?atlOrigin=eyJpIjoiNGM3MzhlMDJjNDRlNDYxOWIwMjQ0MGExODY1NmYxM2IiLCJwIjoiaiJ9)
+
 
 # notion-pkm-cli
 

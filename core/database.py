@@ -1,4 +1,11 @@
 # core/database.py
+"""Database schema inspection and property management for Notion databases.
+
+Provides utilities for retrieving and caching database schemas, identifying
+specific property types (title, multi_select tags), validating configured
+properties, and displaying available properties. Includes caching to minimize
+API calls to the Notion API.
+"""
 from client import notion, _DB_SCHEMA_CACHE
 
 import click

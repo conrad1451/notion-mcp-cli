@@ -1,4 +1,11 @@
 # core/navigation.py
+"""Interactive tag and filter navigation for Notion database searches.
+
+Provides utilities for building hierarchical tag selection interfaces, managing
+include/exclude tag groups, and conducting guided searches through nested tag
+folders. Supports dynamic tag toggling, title filtering, and a 'shopping basket'
+workflow for refining search criteria before querying Notion.
+"""
 import click
 
 from utils.keyboard import get_key_input

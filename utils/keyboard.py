@@ -1,4 +1,11 @@
 # utils/keyboard.py
+"""Cross-platform raw keyboard input handler for terminal applications.
+
+Provides a unified interface for capturing raw keyboard input including arrow keys
+and special characters on both Windows (using msvcrt) and Unix-like systems (using
+tty/termios). Normalizes escape sequences to common key names like 'left', 'right',
+'home', and 'end'.
+"""
 import sys
 import os
 

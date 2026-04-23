@@ -1,4 +1,11 @@
 # core/search.py
+"""Filter construction and database query execution for Notion searches.
+
+Provides utilities for building Notion API filter objects from tag inclusion/exclusion
+groups and title text, combining multiple filter conditions, and executing database
+queries with comprehensive logging and error handling. Supports multi-tag filtering,
+tag exclusion, and title searches.
+"""
 from core.database import get_title_property_name
 from client import notion, KEYS_EXPANDED
 

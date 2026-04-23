@@ -1,4 +1,12 @@
 # utils/formatting.py
+"""Formatting and display utilities for rendering Notion data in the terminal.
+
+Provides functions for extracting and formatting Notion properties (rich text,
+titles, multi-select tags, etc.), converting blocks to Markdown-style text,
+paginating long content, and building interactive selection UIs with single-key
+and multi-select prompts. Includes terminal utilities like text wrapping and
+clickable hyperlinks.
+"""
 import click
 import readchar
 import shutil

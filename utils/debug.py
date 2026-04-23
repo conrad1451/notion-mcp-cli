@@ -1,3 +1,4 @@
+# utils/debug.py
 import click
 
 from client import DEBUG

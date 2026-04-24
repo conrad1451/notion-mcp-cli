@@ -20,7 +20,7 @@ from .formatting import (
 
 from .keyboard import get_key_input
 
-from .search import set_search_fields
+from .search import set_search_fields, set_db_filters
 
 # This tells Pylance/IDE that these are intentional exports
 __all__ = [
@@ -30,4 +30,5 @@ __all__ = [
     "browse_pages",
     "get_key_input",
     "set_search_fields",
+    "set_db_filters",
 ]

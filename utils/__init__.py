@@ -1,7 +1,14 @@
-# actions/__init__.py
+# utils/__init__.py
+"""Utilities package with functions for debugging, formatting, and keyboard input.
+
+Exports:
+    debug: Output debugging information
+    pick_from_list: Select a single item from a list interactively
+    pick_multi_from_list: Select multiple items from a list interactively
+    browse_pages: Navigate through paginated content
+    get_key_input: Capture keyboard input from the user
 """
-Core logic for Notion API filtering and database schema handling.
-"""
+
 from .debug import debug
 
 from .formatting import (

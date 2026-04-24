@@ -4,7 +4,9 @@
 Provides CLI actions for creating, reading, updating, and searching pages
 in a Notion database, including multi-tag search and filtering capabilities.
 """
-from client import KEYS_EXPANDED, load_tag_hierarchy
+import click
+from client import notion, KEYS_EXPANDED, load_tag_hierarchy
+
 from core.database import get_database_schema, get_title_property_name
 from core.search import perform_notion_search
 from actions.navigation import (
@@ -13,8 +15,6 @@ from actions.navigation import (
     pick_from_list,
 )
 from utils.formatting import browse_pages, read_page
-
-import click
 
 
 def action_read():

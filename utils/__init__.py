@@ -7,6 +7,7 @@ Exports:
     pick_multi_from_list: Select multiple items from a list interactively
     browse_pages: Navigate through paginated content
     get_key_input: Capture keyboard input from the user
+    set_search_fields: Filters database properties to find those searchable via text or value
 """
 
 from .debug import debug
@@ -19,6 +20,8 @@ from .formatting import (
 
 from .keyboard import get_key_input
 
+from .search import set_search_fields
+
 # This tells Pylance/IDE that these are intentional exports
 __all__ = [
     "debug",
@@ -26,4 +29,5 @@ __all__ = [
     "pick_multi_from_list",
     "browse_pages",
     "get_key_input",
+    "set_search_fields",
 ]

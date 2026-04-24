@@ -16,6 +16,8 @@ from actions.navigation import (
 )
 from utils.formatting import browse_pages, read_page
 
+from utils.search import set_search_fields
+
 
 def action_read():
     # def action_read(db):

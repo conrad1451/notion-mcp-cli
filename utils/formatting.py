@@ -10,8 +10,8 @@ clickable hyperlinks.
 import click
 import readchar
 import shutil
-
 from typing import List
+
 from client import notion, KEYS_FEW, KEYS_EXPANDED
 from utils.keyboard import get_key_input
 

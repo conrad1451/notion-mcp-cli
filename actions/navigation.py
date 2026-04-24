@@ -7,13 +7,13 @@ folders. Supports dynamic tag toggling, title filtering, and a 'shopping basket'
 workflow for refining search criteria before querying Notion.
 """
 import click
+from client import KEYS_EXPANDED, load_tag_hierarchy
 
 from utils.keyboard import get_key_input
 from utils.formatting import extract_plain_text, pick_from_list, pick_multi_from_list
 from core.search import build_filters, build_notion_filter, perform_notion_search
 from core.database import get_tags_property_name, get_database_schema
 
-from client import KEYS_FEW, KEYS_EXPANDED, load_tag_hierarchy
 
 # KEYS_FEW = "123456789"
 # KEYS = "123456789abcdefghijklmnopqrstuvwxyz"

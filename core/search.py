@@ -6,14 +6,14 @@ groups and title text, combining multiple filter conditions, and executing datab
 queries with comprehensive logging and error handling. Supports multi-tag filtering,
 tag exclusion, and title searches.
 """
-from core.database import get_title_property_name
-from client import notion, KEYS_EXPANDED
-
-from utils.debug import debug
-from utils.formatting import browse_pages
 
 import click
 import json
+from client import notion, KEYS_EXPANDED
+
+from core.database import get_title_property_name
+from utils.debug import debug
+from utils.formatting import browse_pages
 
 
 def build_filters(selected_tag_group, excluded_tag_group, tags_property):

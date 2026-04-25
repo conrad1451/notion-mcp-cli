@@ -1,4 +1,4 @@
-# actions/__init__.py
+# core/__init__.py
 """
 Core logic for Notion API filtering and database schema handling.
 """

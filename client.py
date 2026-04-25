@@ -12,6 +12,7 @@ notion = Client(auth=TOKEN)
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), "databases.json")
 DEBUG = os.getenv("DEBUG", "").lower() in ("1", "true", "yes")
 KEYS_FEW = "123456789"
+KEYS = "123456789abcdefghijklmnopqrstuvwxyz"
 KEYS_EXPANDED = "123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 
 _DB_SCHEMA_CACHE = {}

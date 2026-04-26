@@ -3,7 +3,11 @@ venv/
 __pycache__/
 *.pyc
 databases.json 
+databases_alt.json 
+databases_alt_2.json 
 database_metadata/
 old_database_metadata/
 listoftagnames.txt
 tools/flat_lists
+tools/checkr.py
+tools/namesearch.py

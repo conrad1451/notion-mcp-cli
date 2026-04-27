@@ -2,7 +2,7 @@
 """CRUD operations for managing Notion pages.
 
 Provides CLI actions for creating, reading, updating, and searching pages
-in a Notion database, including multi-tag search and filtering capabilities.
+in a Notion database, including multi-tag subgroup search and filtering.
 """
 import click
 from client import notion, KEYS, KEYS_EXPANDED, load_tag_hierarchy
@@ -15,15 +15,11 @@ from actions.navigation import (
     pick_from_list,
 )
 from utils.formatting import browse_pages, read_page
-
 from utils.search import set_search_fields, set_db_filters
 
 
 def action_read():
-    # def action_read(db):
     """CLI Action: Read a specific page content using its Notion UUID."""
-
-    # click.echo("The database" + db.get("tags_property"))
     page_id = click.prompt("\n📄 Enter page ID")
     try:
         read_page(page_id)
@@ -33,12 +29,9 @@ def action_read():
 
 def action_create(db):
     """CLI Action: Create a new page with a title and optional body text."""
-
     title = click.prompt("\n✏️  Page title")
     body = click.prompt("Body text (optional, press Enter to skip)", default="")
     children = []
-    # CHQ: ChatGPT made function to dynamically Find
-    #      name of title property
     title_prop = get_title_property_name(db["id"])
 
     if body:
@@ -68,7 +61,6 @@ def action_create(db):
 
 def action_append(db):
     """CLI Action: Add a text paragraph to the end of an existing page."""
-
     page_id = click.prompt("\n📎 Enter page ID to append to")
     text = click.prompt("Text to append")
     try:
@@ -92,8 +84,6 @@ def action_append(db):
 # CHQ: Claude AI updated to allow searching by specific properties
 def action_search(db):
     """CLI Action: Search a database by a single chosen property."""
-
-    # Step 1: fetch real properties from Notion
     click.echo("\n⏳ Loading database properties...")
     try:
         result = get_database_schema(db["id"])
@@ -104,7 +94,6 @@ def action_search(db):
 
     search_fields = set_search_fields(props)
 
-    # Step 2: pick search field
     click.echo("\n🔎 Search by:\n")
     field = pick_from_list(
         search_fields,
@@ -118,20 +107,16 @@ def action_search(db):
 
     query = click.prompt(f"\n  Enter value to search for in \"{field['label']}\"")
 
-    # Step 3: build filter based on field type
     ptype = field["type"]
     prop_name = field["label"]
 
-    # CHQ: Gemini AI corrected function call to include arguments
     db_filter = set_db_filters(ptype, prop_name, query)
-    # Step 4: query the database
     try:
         results = notion.databases.query(database_id=db["id"], filter=db_filter)
     except Exception as e:
         click.echo(f"❌ Error querying database: {e}")
         return
 
-    # CHQ: ChatGPT added message warning when reuslts shown are only a subset of total results
     all_pages = results.get("results", [])
     pages = all_pages[: len(KEYS_EXPANDED)]
 
@@ -146,10 +131,8 @@ def action_search(db):
     browse_pages(pages)
 
 
-# CHQ: Gemini AI made this to target folders at any depth
 def action_search_multi_tags(db):
     """CLI Action: Search a database using the hierarchical multi-tag selector."""
-    # Load configuration
     tag_hierarchy = load_tag_hierarchy(db)
     if not tag_hierarchy:
         return
@@ -158,13 +141,14 @@ def action_search_multi_tags(db):
     if not tags_property:
         return
 
-    # User selection loop
-    selected_tag_group, excluded_tag_group, title_filter = run_selection_loop(
-        tag_hierarchy
-    )
+    # run_selection_loop now returns (selected_tag_group, subgroups, title_filter)
+    selected_tag_group, subgroups, title_filter = run_selection_loop(tag_hierarchy)
 
-    # Perform search if valid
     if selected_tag_group or title_filter:
         perform_notion_search(
-            db, selected_tag_group, excluded_tag_group, title_filter, tags_property
+            db,
+            selected_tag_group,
+            subgroups,
+            title_filter,
+            tags_property,
         )

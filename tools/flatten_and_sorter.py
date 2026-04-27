@@ -26,6 +26,7 @@ def flatten_and_sort_tags(data):
 
     return sorted(results, key=lambda s: s.lower())
 
+
 input_list = [
     "../database_metadata/tag_categories_apr10at12amupdate.json",
     "../database_metadata/rescal_versions/data_structure/tag_categories_v8.json",
@@ -38,7 +39,10 @@ input_list = [
     "../database_metadata/rescal_versions/data_structure/9_5v2.json",
     "../database_metadata/rescal_versions/data_structure/tag_categories_v9_6.json",
     "../database_metadata/rescal_versions/data_structure/tag_categories_v9_8.json",
-    "../database_metadata/tag_categories.json"
+    "../database_metadata/tag_categorieswk16.json",
+    "../database_metadata/tag_categories.json",
+    "../database_metadata/tag_categories_unsorted.json",
+    "../database_metadata/tag_categories.json",
 ]
 
 output_list = [
@@ -53,7 +57,10 @@ output_list = [
     "../database_metadata/rescal_versions/flat_list/flat_tag_9_5v2.json",
     "../database_metadata/rescal_versions/flat_list/flat_tag_categories_v9_6.json",
     "../database_metadata/rescal_versions/flat_list/flat_tag_categories_v9_8.json",
-    "../database_metadata/rescal_versions/flat_list/flat_tag_categories_current.json"
+    "../database_metadata/rescal_versions/flat_list/flat_tag_categories_wk16.json",
+    "../database_metadata/rescal_versions/flat_list/flat_tag_categories_current_wk17.json",
+    "../database_metadata/rescal_versions/flat_list/flat_tag_categories_unsorted.json",
+    "../database_metadata/rescal_versions/flat_list/flat_tag_categories_sorted.json",
 ]
 
 # input_file = "../database_metadata/tag_categories.json"

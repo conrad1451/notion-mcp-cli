@@ -2,8 +2,8 @@
 """Interactive tag and filter navigation for Notion database searches.
 
 Provides utilities for building hierarchical tag selection interfaces, managing
-include/exclude tag groups, and conducting guided searches through nested tag
-folders. Supports dynamic tag toggling, title filtering, and a 'shopping basket'
+subgroup-based tag organisation with per-subgroup NOT logic, and conducting
+guided searches through nested tag folders. Supports a 'shopping basket'
 workflow for refining search criteria before querying Notion.
 """
 import click
@@ -15,111 +15,425 @@ from core.search import build_filters, build_notion_filter, perform_notion_searc
 from core.database import get_tags_property_name, get_database_schema
 
 
-# KEYS_FEW = "123456789"
-# KEYS = "123456789abcdefghijklmnopqrstuvwxyz"
-# KEYS_EXPANDED = "123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+# ---------------------------------------------------------------------------
+# Session-level saved subgroups (persists until the Python process exits)
+# ---------------------------------------------------------------------------
+_SESSION_SAVED_SUBGROUPS: list[dict] = []
 
 
-# def get_tags_property_name(db):
-#     """
-#     Validates and retrieves the configured 'multi_select' property for tagging.
-
-#     Args:
-#         db (dict): The database config object.
-
-#     Returns:
-#         str: The property name if valid.
-#     """
-#     prop_name = db.get("tags_property")
-#     if not prop_name:
-#         raise ValueError("No tags_property configured for this database")
-#     result = get_database_schema(db["id"])
-#     props = result.get("properties", {})
-
-#     if prop_name not in props:
-#         raise ValueError(f"Configured tags_property '{prop_name}' not found")
-
-#     if props[prop_name].get("type") != "multi_select":
-#         raise ValueError(f"Configured tags_property '{prop_name}' is not multi_select")
-
-#     return prop_name
+# ---------------------------------------------------------------------------
+# Subgroup helpers
+# ---------------------------------------------------------------------------
 
 
-def toggle_tag_inclusion(selected_tag_group, excluded_tag_group):
+def _make_subgroup(name: str) -> dict:
+    """Create an empty subgroup dict."""
+    return {
+        "name": name,
+        "include_tags": set(),  # tags that must be present (OR within group)
+        "not_tags": set(),  # tags explicitly negated within this group
+        "is_not": False,  # whether the whole subgroup is negated
+        "operator_after": "AND",  # operator connecting this group to the next
+    }
+
+
+def _all_assigned_tags(subgroups: list[dict]) -> set:
+    """Return every tag assigned to any subgroup (include or not)."""
+    assigned = set()
+    for sg in subgroups:
+        assigned |= sg["include_tags"]
+        assigned |= sg["not_tags"]
+    return assigned
+
+
+def _unassigned_tags(selected_tag_group: set, subgroups: list[dict]) -> set:
+    return selected_tag_group - _all_assigned_tags(subgroups)
+
+
+# ---------------------------------------------------------------------------
+# Subgroup organiser — main entry point
+# ---------------------------------------------------------------------------
+
+
+def organise_into_subgroups(
+    selected_tag_group: set,
+    subgroups: list[dict],
+) -> list[dict]:
     """
-    Interactive utility to move tags between 'Include' and 'Exclude' sets.
+    Interactive organiser that lets the user distribute selected_tag_group
+    tags into named subgroups with include/NOT semantics and AND/OR operators.
 
     Args:
-        selected_tag_group (set): Set of tags to be included in search.
-        excluded_tag_group (set): Set of tags to be explicitly filtered out.
+        selected_tag_group: The flat pool of tags chosen during browsing.
+        subgroups: Existing subgroup list (may be empty on first entry).
+
+    Returns:
+        Updated subgroups list.
     """
-    all_tags = sorted(selected_tag_group | excluded_tag_group)
+    while True:
+        _print_subgroup_overview(subgroups, selected_tag_group)
 
-    if not all_tags:
-        click.echo("\n⚠️ No tags selected yet.")
-        return
+        options = [
+            {"label": "➕  Add new subgroup", "action": "add"},
+            {"label": "✏️   Edit a subgroup", "action": "edit"},
+            {"label": "🔀  Swap two subgroups (reorder)", "action": "swap"},
+            {"label": "🗑️   Delete a subgroup", "action": "delete"},
+            {"label": "💾  Save a subgroup to session", "action": "save"},
+            {"label": "📂  Load a saved subgroup", "action": "load"},
+            {"label": "✅  Done", "action": "done"},
+        ]
 
-    click.echo("\n🔄 Toggle tags between Include and Exclude:\n")
-    click.echo("Current status:")
-    for tag in all_tags:
-        status = "✓ Include" if tag in selected_tag_group else "✗ Exclude"
-        click.echo(f"  - {tag}: {status}")
+        click.echo("\n--- Subgroup Organiser ---")
+        choice = pick_from_list(
+            options,
+            label_fn=lambda o: o["label"],
+            key_list="1234567",
+        )
+        if choice is None:
+            break
 
-    click.echo()
-    chosen_tags = pick_multi_from_list(
-        all_tags,
-        label_fn=lambda t: (
-            f"{t} [{'INCLUDE' if t in selected_tag_group else 'EXCLUDE'}]"
-        ),
+        action = choice["action"]
+
+        if action == "done":
+            unassigned = _unassigned_tags(selected_tag_group, subgroups)
+            if unassigned:
+                click.echo(
+                    f"\n⚠️  The following tags are still unassigned: "
+                    f"{', '.join(sorted(unassigned))}"
+                )
+                click.echo("   Please assign all tags before finishing.")
+                continue
+            break
+
+        elif action == "add":
+            if len(subgroups) >= 10:
+                click.echo("⚠️  Maximum of 10 subgroups reached.")
+                continue
+            name = f"SG{len(subgroups) + 1}"
+            subgroups.append(_make_subgroup(name))
+            click.echo(f"✅  Added subgroup '{name}'.")
+
+        elif action == "edit":
+            sg = _pick_subgroup(subgroups, "Edit which subgroup?")
+            if sg:
+                _edit_subgroup(sg, selected_tag_group, subgroups)
+
+        elif action == "swap":
+            _swap_subgroups(subgroups)
+
+        elif action == "delete":
+            sg = _pick_subgroup(subgroups, "Delete which subgroup?")
+            if sg:
+                subgroups.remove(sg)
+                click.echo(f"🗑️  Deleted '{sg['name']}'.")
+
+        elif action == "save":
+            sg = _pick_subgroup(subgroups, "Save which subgroup to session?")
+            if sg:
+                import copy
+
+                _SESSION_SAVED_SUBGROUPS.append(copy.deepcopy(sg))
+                click.echo(f"💾  Saved '{sg['name']}' to session.")
+
+        elif action == "load":
+            _load_saved_subgroup(subgroups, selected_tag_group)
+
+    return subgroups
+
+
+# ---------------------------------------------------------------------------
+# Subgroup overview display
+# ---------------------------------------------------------------------------
+
+
+def _print_subgroup_overview(subgroups: list[dict], selected_tag_group: set):
+    click.echo("\n" + "─" * 50)
+    click.echo("📦 Subgroups:")
+    if not subgroups:
+        click.echo("  (none yet)")
+    else:
+        for i, sg in enumerate(subgroups):
+            not_prefix = "NOT " if sg["is_not"] else ""
+            include_str = (
+                ", ".join(sorted(sg["include_tags"])) if sg["include_tags"] else "—"
+            )
+            not_str = ", ".join(sorted(sg["not_tags"])) if sg["not_tags"] else "—"
+            click.echo(
+                f"  [{i + 1}] {not_prefix}{sg['name']}"
+                f"  ✓ {include_str}  ✗ {not_str}"
+            )
+            if i < len(subgroups) - 1:
+                click.echo(f"       ── {sg['operator_after']} ──")
+
+    unassigned = _unassigned_tags(selected_tag_group, subgroups)
+    if unassigned:
+        click.echo(f"\n  ⚠️  Unassigned: {', '.join(sorted(unassigned))}")
+    click.echo("─" * 50)
+
+
+# ---------------------------------------------------------------------------
+# Subgroup picker
+# ---------------------------------------------------------------------------
+
+
+def _pick_subgroup(subgroups: list[dict], prompt: str) -> dict | None:
+    if not subgroups:
+        click.echo("⚠️  No subgroups exist yet.")
+        return None
+    click.echo(f"\n{prompt}")
+    return pick_from_list(
+        subgroups,
+        label_fn=lambda sg: sg["name"],
         key_list=KEYS_EXPANDED,
-        prompt="Select tags to toggle, then press Enter: ",
     )
 
-    if not chosen_tags:
-        click.echo("No tags toggled.")
+
+# ---------------------------------------------------------------------------
+# Subgroup editor
+# ---------------------------------------------------------------------------
+
+
+def _edit_subgroup(sg: dict, selected_tag_group: set, all_subgroups: list[dict]):
+    """Interactive menu to edit a single subgroup."""
+    while True:
+        not_prefix = "NOT " if sg["is_not"] else ""
+        include_str = ", ".join(sorted(sg["include_tags"])) or "—"
+        not_str = ", ".join(sorted(sg["not_tags"])) or "—"
+        click.echo(
+            f"\n✏️  Editing: {not_prefix}{sg['name']}"
+            f"  |  ✓ Include: {include_str}  |  ✗ NOT: {not_str}"
+            f"  |  Operator after: {sg['operator_after']}"
+        )
+
+        options = [
+            {"label": "Rename this subgroup", "action": "rename"},
+            {"label": "Add include tags", "action": "add_include"},
+            {"label": "Remove include tags", "action": "rm_include"},
+            {"label": "Add NOT tags", "action": "add_not"},
+            {"label": "Remove NOT tags", "action": "rm_not"},
+            {
+                "label": f"Toggle whole-subgroup NOT (currently: {sg['is_not']})",
+                "action": "toggle_not",
+            },
+            {
+                "label": f"Set operator after (currently: {sg['operator_after']})",
+                "action": "operator",
+            },
+            {"label": "Done editing", "action": "done"},
+        ]
+
+        choice = pick_from_list(
+            options,
+            label_fn=lambda o: o["label"],
+            key_list="12345678",
+        )
+        if choice is None or choice["action"] == "done":
+            break
+
+        action = choice["action"]
+
+        if action == "rename":
+            new_name = click.prompt("New name", default=sg["name"])
+            sg["name"] = new_name.strip() or sg["name"]
+
+        elif action == "add_include":
+            available = _available_tags_for_subgroup(
+                selected_tag_group, sg, all_subgroups, include_own=True
+            )
+            if not available:
+                click.echo("⚠️  No unassigned tags available.")
+                continue
+            chosen = pick_multi_from_list(
+                sorted(available),
+                label_fn=lambda t: t,
+                key_list=KEYS_EXPANDED,
+            )
+            sg["include_tags"].update(chosen)
+            # A tag can only live in one place; remove from not_tags if moved
+            sg["not_tags"] -= set(chosen)
+
+        elif action == "rm_include":
+            if not sg["include_tags"]:
+                click.echo("⚠️  No include tags to remove.")
+                continue
+            chosen = pick_multi_from_list(
+                sorted(sg["include_tags"]),
+                label_fn=lambda t: t,
+                key_list=KEYS_EXPANDED,
+            )
+            sg["include_tags"] -= set(chosen)
+
+        elif action == "add_not":
+            available = _available_tags_for_subgroup(
+                selected_tag_group, sg, all_subgroups, include_own=True
+            )
+            if not available:
+                click.echo("⚠️  No unassigned tags available.")
+                continue
+            chosen = pick_multi_from_list(
+                sorted(available),
+                label_fn=lambda t: t,
+                key_list=KEYS_EXPANDED,
+            )
+            sg["not_tags"].update(chosen)
+            sg["include_tags"] -= set(chosen)
+
+        elif action == "rm_not":
+            if not sg["not_tags"]:
+                click.echo("⚠️  No NOT tags to remove.")
+                continue
+            chosen = pick_multi_from_list(
+                sorted(sg["not_tags"]),
+                label_fn=lambda t: t,
+                key_list=KEYS_EXPANDED,
+            )
+            sg["not_tags"] -= set(chosen)
+
+        elif action == "toggle_not":
+            sg["is_not"] = not sg["is_not"]
+            click.echo(f"  Subgroup is now {'NOT ' if sg['is_not'] else ''}negated.")
+
+        elif action == "operator":
+            op = pick_from_list(
+                ["AND", "OR"],
+                label_fn=lambda x: x,
+                key_list="12",
+                prompt="Operator after this subgroup: ",
+            )
+            if op:
+                sg["operator_after"] = op
+
+
+def _available_tags_for_subgroup(
+    selected_tag_group: set,
+    current_sg: dict,
+    all_subgroups: list[dict],
+    include_own: bool,
+) -> set:
+    """
+    Tags from selected_tag_group that are not yet assigned to any subgroup,
+    plus (optionally) tags already in current_sg itself.
+    """
+    assigned_elsewhere = set()
+    for sg in all_subgroups:
+        if sg is current_sg:
+            continue
+        assigned_elsewhere |= sg["include_tags"]
+        assigned_elsewhere |= sg["not_tags"]
+
+    available = selected_tag_group - assigned_elsewhere
+    if not include_own:
+        available -= current_sg["include_tags"]
+        available -= current_sg["not_tags"]
+    return available
+
+
+# ---------------------------------------------------------------------------
+# Swap / reorder
+# ---------------------------------------------------------------------------
+
+
+def _swap_subgroups(subgroups: list[dict]):
+    if len(subgroups) < 2:
+        click.echo("⚠️  Need at least 2 subgroups to swap.")
+        return
+    click.echo("\nSwap: pick first subgroup.")
+    a = _pick_subgroup(subgroups, "First:")
+    if not a:
+        return
+    click.echo("Pick second subgroup.")
+    b = _pick_subgroup(subgroups, "Second:")
+    if not b or b is a:
+        click.echo("⚠️  Same subgroup selected, no swap performed.")
+        return
+    i, j = subgroups.index(a), subgroups.index(b)
+    subgroups[i], subgroups[j] = subgroups[j], subgroups[i]
+    click.echo(f"🔀  Swapped '{a['name']}' and '{b['name']}'.")
+
+
+# ---------------------------------------------------------------------------
+# Save / load session subgroups
+# ---------------------------------------------------------------------------
+
+
+def _load_saved_subgroup(subgroups: list[dict], selected_tag_group: set):
+    if not _SESSION_SAVED_SUBGROUPS:
+        click.echo("⚠️  No subgroups saved in this session.")
+        return
+    if len(subgroups) >= 10:
+        click.echo("⚠️  Maximum of 10 subgroups already reached.")
         return
 
-    for tag in chosen_tags:
-        if tag in selected_tag_group:
-            selected_tag_group.remove(tag)
-            excluded_tag_group.add(tag)
-        elif tag in excluded_tag_group:
-            excluded_tag_group.remove(tag)
-            selected_tag_group.add(tag)
+    click.echo("\n📂 Saved subgroups:")
+    chosen = pick_from_list(
+        _SESSION_SAVED_SUBGROUPS,
+        label_fn=lambda sg: (
+            f"{sg['name']}  ✓ {', '.join(sorted(sg['include_tags'])) or '—'}"
+            f"  ✗ {', '.join(sorted(sg['not_tags'])) or '—'}"
+        ),
+        key_list=KEYS_EXPANDED,
+    )
+    if not chosen:
+        return
 
-    click.echo("\n✅ Updated tag inclusion/exclusion.")
+    import copy
+
+    loaded = copy.deepcopy(chosen)
+
+    # Automatically add any tags from the saved subgroup into selected_tag_group
+    # so they are treated as if the user had browsed and selected them
+    foreign = (loaded["include_tags"] | loaded["not_tags"]) - selected_tag_group
+    if foreign:
+        selected_tag_group.update(foreign)
+        click.echo(f"\n➕  Added to selection pool: {', '.join(sorted(foreign))}")
+
+    # Warn about tags already assigned to another subgroup and drop conflicts
+    already_assigned = _all_assigned_tags(subgroups)
+    conflicts = (loaded["include_tags"] | loaded["not_tags"]) & already_assigned
+    if conflicts:
+        click.echo(
+            f"⚠️  These tags are already assigned to another subgroup and will "
+            f"be removed from the loaded subgroup: {', '.join(sorted(conflicts))}"
+        )
+        loaded["include_tags"] -= conflicts
+        loaded["not_tags"] -= conflicts
+
+    subgroups.append(loaded)
+    click.echo(f"✅  Loaded '{loaded['name']}' into current subgroups.")
 
 
-# CHQ: Claude AI made helper function
-def show_basket_menu(
-    tag_hierarchy, selected_tag_group, excluded_tag_group, title_filter
-):
-    """Display current selection and return user's chosen action."""
-    # If nothing is selected, don't show the menu, just go straight to browsing
-    if not (selected_tag_group or excluded_tag_group or title_filter):
+# ---------------------------------------------------------------------------
+# Basket menu (replaces old toggle)
+# ---------------------------------------------------------------------------
+
+
+def show_basket_menu(tag_hierarchy, selected_tag_group, subgroups, title_filter):
+    """Display current selection basket and return the user's chosen action."""
+    if not (selected_tag_group or title_filter):
         return "continue"
 
     click.echo("\n" + "─" * 40)
     click.echo("🛒 Current Selection Basket:")
 
-    include_text = (
-        ", ".join(sorted(selected_tag_group)) if selected_tag_group else "none"
-    )
-    click.echo(f"  ✓ Include: {include_text}")
+    tags_text = ", ".join(sorted(selected_tag_group)) if selected_tag_group else "none"
+    click.echo(f"  🏷️  Selected tags: {tags_text}")
 
-    exclude_text = (
-        ", ".join(sorted(excluded_tag_group)) if excluded_tag_group else "none"
-    )
-    click.echo(f"  ✗ Exclude: {exclude_text}")
+    if subgroups:
+        click.echo(f"  📦  Subgroups defined: {len(subgroups)}")
+        unassigned = _unassigned_tags(selected_tag_group, subgroups)
+        if unassigned:
+            click.echo(f"  ⚠️   Unassigned: {', '.join(sorted(unassigned))}")
+    else:
+        click.echo("  📦  Subgroups: none")
 
     if title_filter:
-        click.echo(f"  🔤 Title contains: '{title_filter}'")
+        click.echo(f"  🔤  Title contains: '{title_filter}'")
 
     options = [
         {"label": "🚀 Search Notion now", "action": "search"},
         {"label": "📂 Browse tags / Add more", "action": "continue"},
         {"label": "🔤 Set/Change title filter", "action": "title"},
-        {"label": "🔄 Toggle Include/Exclude status", "action": "toggle"},
+        {"label": "📦 Organise into subgroups", "action": "subgroups"},
         {"label": "🗑️  Clear all", "action": "clear"},
         {"label": "⬅️  Cancel and go back", "action": "cancel"},
     ]
@@ -132,7 +446,11 @@ def show_basket_menu(
     return selected_option["action"] if selected_option else "cancel"
 
 
-# CHQ: Claude AI made helper function
+# ---------------------------------------------------------------------------
+# Tag navigation (unchanged from original)
+# ---------------------------------------------------------------------------
+
+
 def get_tags_property_name_safe(db):
     """Safely retrieve tags property name with error handling."""
     try:
@@ -142,18 +460,14 @@ def get_tags_property_name_safe(db):
         return None
 
 
-# CHQ: Claude AI made helper function
-# Gemini AI added tag_heirarchy as parameter
-def navigate_and_select_tags(tag_hierarchy, selected_tag_group, excluded_tag_group):
+def navigate_and_select_tags(tag_hierarchy, selected_tag_group):
     """
     Recursive-style navigation through the tag folders to pick items.
 
     Args:
         tag_hierarchy (dict): The hierarchy to navigate.
         selected_tag_group (set): Set to update with new inclusions.
-        excluded_tag_group (set): Set to update with exclusions.
     """
-    # Use a stack to keep track of folder levels so 'Back' works properly
     history = [(tag_hierarchy, "Root")]
 
     while history:
@@ -173,7 +487,7 @@ def navigate_and_select_tags(tag_hierarchy, selected_tag_group, excluded_tag_gro
             if selected_key:
                 history.append((current_data[selected_key], selected_key))
             else:
-                history.pop()  # Go up one level
+                history.pop()
 
         elif isinstance(current_data, list):
             selected_tags = pick_multi_from_list(
@@ -183,68 +497,91 @@ def navigate_and_select_tags(tag_hierarchy, selected_tag_group, excluded_tag_gro
             )
             if selected_tags:
                 selected_tag_group.update(selected_tags)
-                excluded_tag_group.difference_update(selected_tags)
 
-            history.pop()  # Return to the parent folder after selection
+            history.pop()
 
         if not history:
             break
 
 
-# CHQ: Claude AI made helper function
 def get_title_filter_from_user():
     """Prompt user for title filter."""
     return click.prompt("\n🔤 Enter title to search for (or press Enter to clear)")
 
 
-# CHQ: Claude AI made helper function
+# ---------------------------------------------------------------------------
+# Main selection loop
+# ---------------------------------------------------------------------------
+
+
 def run_selection_loop(tag_hierarchy):
     """
-    The 'Shopping Basket' loop where users build their search criteria.
+    The 'Shopping Basket' loop where users build their search criteria,
+    including organising tags into subgroups.
 
     Args:
         tag_hierarchy (dict): The structured tag data.
 
     Returns:
-        tuple: (selected_tags, excluded_tags, title_filter_string)
+        tuple: (selected_tag_group, subgroups, title_filter)
+            - selected_tag_group (set): All tags chosen during browsing.
+            - subgroups (list[dict]): Subgroup definitions (may be empty).
+            - title_filter (str): Optional title substring filter.
     """
-    """Main loop for user to select tags and filters."""
-    selected_tag_group = set()
-    excluded_tag_group = set()
-    title_filter = ""
+    selected_tag_group: set = set()
+    subgroups: list[dict] = []
+    title_filter: str = ""
 
     while True:
         action = show_basket_menu(
-            tag_hierarchy, selected_tag_group, excluded_tag_group, title_filter
+            tag_hierarchy, selected_tag_group, subgroups, title_filter
         )
 
         if action == "cancel":
-            return set(), set(), ""
+            return set(), [], ""
+
         if action == "clear":
             selected_tag_group.clear()
-            excluded_tag_group.clear()
+            subgroups.clear()
             title_filter = ""
             continue
+
         if action == "title":
             title_filter = get_title_filter_from_user()
             continue
-        if action == "toggle":
-            toggle_tag_inclusion(selected_tag_group, excluded_tag_group)
+
+        if action == "subgroups":
+            subgroups = organise_into_subgroups(selected_tag_group, subgroups)
             continue
+
         if action == "search":
+            # Block search if subgroups exist but tags are unassigned
+            if subgroups:
+                unassigned = _unassigned_tags(selected_tag_group, subgroups)
+                if unassigned:
+                    click.echo(
+                        f"\n🚫 Cannot search: unassigned tags remain: "
+                        f"{', '.join(sorted(unassigned))}"
+                    )
+                    click.echo(
+                        "   Use '📦 Organise into subgroups' to assign them first."
+                    )
+                    continue
             break
+
         if action == "continue":
-            navigate_and_select_tags(
-                tag_hierarchy, selected_tag_group, excluded_tag_group
-            )
+            navigate_and_select_tags(tag_hierarchy, selected_tag_group)
 
-    return selected_tag_group, excluded_tag_group, title_filter
+    return selected_tag_group, subgroups, title_filter
 
 
-# CHQ: Gemini AI made this to target folders at any depth
+# ---------------------------------------------------------------------------
+# Top-level CLI action (used by actions/crud.py)
+# ---------------------------------------------------------------------------
+
+
 def action_search_multi_tags(db):
     """CLI Action: Search a database using the hierarchical multi-tag selector."""
-    # Load configuration
     tag_hierarchy = load_tag_hierarchy(db)
     if not tag_hierarchy:
         return
@@ -253,13 +590,13 @@ def action_search_multi_tags(db):
     if not tags_property:
         return
 
-    # User selection loop
-    selected_tag_group, excluded_tag_group, title_filter = run_selection_loop(
-        tag_hierarchy
-    )
+    selected_tag_group, subgroups, title_filter = run_selection_loop(tag_hierarchy)
 
-    # Perform search if valid
     if selected_tag_group or title_filter:
         perform_notion_search(
-            db, selected_tag_group, excluded_tag_group, title_filter, tags_property
+            db,
+            selected_tag_group,
+            subgroups,
+            title_filter,
+            tags_property,
         )

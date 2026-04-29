@@ -70,7 +70,9 @@ def organise_into_subgroups(
     Returns:
         Updated subgroups list.
     """
-    while True:
+    is_currently_selecting = True
+
+    while is_currently_selecting:
         _print_subgroup_overview(subgroups, selected_tag_group)
 
         options = [
@@ -83,60 +85,64 @@ def organise_into_subgroups(
             {"label": "✅  Done", "action": "done"},
         ]
 
+        click.echo("Broski gotta do my test!")
         click.echo("\n--- Subgroup Organiser ---")
         choice = pick_from_list(
             options,
             label_fn=lambda o: o["label"],
             key_list="1234567",
         )
-        if choice is None:
-            break
+        # if choice is None:
+        #     break
 
-        action = choice["action"]
+        if not choice is None:
+            action = choice["action"]
 
-        if action == "done":
-            unassigned = _unassigned_tags(selected_tag_group, subgroups)
-            if unassigned:
-                click.echo(
-                    f"\n⚠️  The following tags are still unassigned: "
-                    f"{', '.join(sorted(unassigned))}"
-                )
-                click.echo("   Please assign all tags before finishing.")
-                continue
-            break
+            if action == "done":
+                unassigned = _unassigned_tags(selected_tag_group, subgroups)
+                if unassigned:
+                    click.echo(
+                        f"\n⚠️  The following tags are still unassigned: "
+                        f"{', '.join(sorted(unassigned))}"
+                    )
+                    click.echo("   Please assign all tags before finishing.")
+                    # continue
+                # break
+                else:
+                    is_currently_selecting = False
 
-        elif action == "add":
-            if len(subgroups) >= 10:
-                click.echo("⚠️  Maximum of 10 subgroups reached.")
-                continue
-            name = f"SG{len(subgroups) + 1}"
-            subgroups.append(_make_subgroup(name))
-            click.echo(f"✅  Added subgroup '{name}'.")
+            elif action == "add":
+                if len(subgroups) >= 10:
+                    click.echo("⚠️  Maximum of 10 subgroups reached.")
+                    continue
+                name = f"SG{len(subgroups) + 1}"
+                subgroups.append(_make_subgroup(name))
+                click.echo(f"✅  Added subgroup '{name}'.")
 
-        elif action == "edit":
-            sg = _pick_subgroup(subgroups, "Edit which subgroup?")
-            if sg:
-                _edit_subgroup(sg, selected_tag_group, subgroups)
+            elif action == "edit":
+                sg = _pick_subgroup(subgroups, "Edit which subgroup?")
+                if sg:
+                    _edit_subgroup(sg, selected_tag_group, subgroups)
 
-        elif action == "swap":
-            _swap_subgroups(subgroups)
+            elif action == "swap":
+                _swap_subgroups(subgroups)
 
-        elif action == "delete":
-            sg = _pick_subgroup(subgroups, "Delete which subgroup?")
-            if sg:
-                subgroups.remove(sg)
-                click.echo(f"🗑️  Deleted '{sg['name']}'.")
+            elif action == "delete":
+                sg = _pick_subgroup(subgroups, "Delete which subgroup?")
+                if sg:
+                    subgroups.remove(sg)
+                    click.echo(f"🗑️  Deleted '{sg['name']}'.")
 
-        elif action == "save":
-            sg = _pick_subgroup(subgroups, "Save which subgroup to session?")
-            if sg:
-                import copy
+            elif action == "save":
+                sg = _pick_subgroup(subgroups, "Save which subgroup to session?")
+                if sg:
+                    import copy
 
-                _SESSION_SAVED_SUBGROUPS.append(copy.deepcopy(sg))
-                click.echo(f"💾  Saved '{sg['name']}' to session.")
+                    _SESSION_SAVED_SUBGROUPS.append(copy.deepcopy(sg))
+                    click.echo(f"💾  Saved '{sg['name']}' to session.")
 
-        elif action == "load":
-            _load_saved_subgroup(subgroups, selected_tag_group)
+            elif action == "load":
+                _load_saved_subgroup(subgroups, selected_tag_group)
 
     return subgroups
 

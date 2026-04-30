@@ -6,6 +6,7 @@ subgroup-based tag organisation with per-subgroup NOT logic, and conducting
 guided searches through nested tag folders. Supports a 'shopping basket'
 workflow for refining search criteria before querying Notion.
 """
+
 import click
 from client import KEYS_EXPANDED, load_tag_hierarchy
 
@@ -13,7 +14,6 @@ from utils.keyboard import get_key_input
 from utils.formatting import extract_plain_text, pick_from_list, pick_multi_from_list
 from core.search import build_filters, build_notion_filter, perform_notion_search
 from core.database import get_tags_property_name, get_database_schema
-
 
 # ---------------------------------------------------------------------------
 # Session-level saved subgroups (persists until the Python process exits)
@@ -70,7 +70,9 @@ def organise_into_subgroups(
     Returns:
         Updated subgroups list.
     """
-    while True:
+    is_currently_selecting = True
+
+    while is_currently_selecting:
         _print_subgroup_overview(subgroups, selected_tag_group)
 
         options = [
@@ -83,60 +85,62 @@ def organise_into_subgroups(
             {"label": "✅  Done", "action": "done"},
         ]
 
+        click.echo("Broski gotta do my test!")
         click.echo("\n--- Subgroup Organiser ---")
         choice = pick_from_list(
             options,
             label_fn=lambda o: o["label"],
             key_list="1234567",
         )
-        if choice is None:
-            break
 
-        action = choice["action"]
+        is_currently_selecting = not choice is None
 
-        if action == "done":
-            unassigned = _unassigned_tags(selected_tag_group, subgroups)
-            if unassigned:
-                click.echo(
-                    f"\n⚠️  The following tags are still unassigned: "
-                    f"{', '.join(sorted(unassigned))}"
-                )
-                click.echo("   Please assign all tags before finishing.")
-                continue
-            break
+        if is_currently_selecting:
+            action = choice["action"]
 
-        elif action == "add":
-            if len(subgroups) >= 10:
-                click.echo("⚠️  Maximum of 10 subgroups reached.")
-                continue
-            name = f"SG{len(subgroups) + 1}"
-            subgroups.append(_make_subgroup(name))
-            click.echo(f"✅  Added subgroup '{name}'.")
+            if action == "done":
+                unassigned = _unassigned_tags(selected_tag_group, subgroups)
+                if unassigned:
+                    click.echo(
+                        f"\n⚠️  The following tags are still unassigned: "
+                        f"{', '.join(sorted(unassigned))}"
+                    )
+                    click.echo("   Please assign all tags before finishing.")
+                else:
+                    is_currently_selecting = False
 
-        elif action == "edit":
-            sg = _pick_subgroup(subgroups, "Edit which subgroup?")
-            if sg:
-                _edit_subgroup(sg, selected_tag_group, subgroups)
+            elif action == "add":
+                if len(subgroups) < 10:
+                    name = f"SG{len(subgroups) + 1}"
+                    subgroups.append(_make_subgroup(name))
+                    click.echo(f"✅  Added subgroup '{name}'.")
+                else:
+                    click.echo("⚠️  Maximum of 10 subgroups reached.")
+                
+            elif action == "edit":
+                sg = _pick_subgroup(subgroups, "Edit which subgroup?")
+                if sg:
+                    _edit_subgroup(sg, selected_tag_group, subgroups)
 
-        elif action == "swap":
-            _swap_subgroups(subgroups)
+            elif action == "swap":
+                _swap_subgroups(subgroups)
 
-        elif action == "delete":
-            sg = _pick_subgroup(subgroups, "Delete which subgroup?")
-            if sg:
-                subgroups.remove(sg)
-                click.echo(f"🗑️  Deleted '{sg['name']}'.")
+            elif action == "delete":
+                sg = _pick_subgroup(subgroups, "Delete which subgroup?")
+                if sg:
+                    subgroups.remove(sg)
+                    click.echo(f"🗑️  Deleted '{sg['name']}'.")
 
-        elif action == "save":
-            sg = _pick_subgroup(subgroups, "Save which subgroup to session?")
-            if sg:
-                import copy
+            elif action == "save":
+                sg = _pick_subgroup(subgroups, "Save which subgroup to session?")
+                if sg:
+                    import copy
 
-                _SESSION_SAVED_SUBGROUPS.append(copy.deepcopy(sg))
-                click.echo(f"💾  Saved '{sg['name']}' to session.")
+                    _SESSION_SAVED_SUBGROUPS.append(copy.deepcopy(sg))
+                    click.echo(f"💾  Saved '{sg['name']}' to session.")
 
-        elif action == "load":
-            _load_saved_subgroup(subgroups, selected_tag_group)
+            elif action == "load":
+                _load_saved_subgroup(subgroups, selected_tag_group)
 
     return subgroups
 
@@ -195,7 +199,9 @@ def _pick_subgroup(subgroups: list[dict], prompt: str) -> dict | None:
 
 def _edit_subgroup(sg: dict, selected_tag_group: set, all_subgroups: list[dict]):
     """Interactive menu to edit a single subgroup."""
-    while True:
+    has_exited_loop = False
+
+    while not has_exited_loop:
         not_prefix = "NOT " if sg["is_not"] else ""
         include_str = ", ".join(sorted(sg["include_tags"])) or "—"
         not_str = ", ".join(sorted(sg["not_tags"])) or "—"
@@ -227,81 +233,87 @@ def _edit_subgroup(sg: dict, selected_tag_group: set, all_subgroups: list[dict])
             label_fn=lambda o: o["label"],
             key_list="12345678",
         )
-        if choice is None or choice["action"] == "done":
-            break
 
-        action = choice["action"]
+        has_exited_loop = choice is None or choice["action"] == "done"
 
-        if action == "rename":
-            new_name = click.prompt("New name", default=sg["name"])
-            sg["name"] = new_name.strip() or sg["name"]
+        if not has_exited_loop:
+            action = choice["action"]
 
-        elif action == "add_include":
-            available = _available_tags_for_subgroup(
-                selected_tag_group, sg, all_subgroups, include_own=True
-            )
-            if not available:
-                click.echo("⚠️  No unassigned tags available.")
-                continue
-            chosen = pick_multi_from_list(
-                sorted(available),
-                label_fn=lambda t: t,
-                key_list=KEYS_EXPANDED,
-            )
-            sg["include_tags"].update(chosen)
-            # A tag can only live in one place; remove from not_tags if moved
-            sg["not_tags"] -= set(chosen)
+            if action == "rename":
+                new_name = click.prompt("New name", default=sg["name"])
+                sg["name"] = new_name.strip() or sg["name"]
 
-        elif action == "rm_include":
-            if not sg["include_tags"]:
-                click.echo("⚠️  No include tags to remove.")
-                continue
-            chosen = pick_multi_from_list(
-                sorted(sg["include_tags"]),
-                label_fn=lambda t: t,
-                key_list=KEYS_EXPANDED,
-            )
-            sg["include_tags"] -= set(chosen)
+            elif action == "add_include":
+                available = _available_tags_for_subgroup(
+                    selected_tag_group, sg, all_subgroups, include_own=True
+                )
+                if not available:
+                    click.echo("⚠️  No unassigned tags available.")
 
-        elif action == "add_not":
-            available = _available_tags_for_subgroup(
-                selected_tag_group, sg, all_subgroups, include_own=True
-            )
-            if not available:
-                click.echo("⚠️  No unassigned tags available.")
-                continue
-            chosen = pick_multi_from_list(
-                sorted(available),
-                label_fn=lambda t: t,
-                key_list=KEYS_EXPANDED,
-            )
-            sg["not_tags"].update(chosen)
-            sg["include_tags"] -= set(chosen)
+                chosen = pick_multi_from_list(
+                    sorted(available),
+                    label_fn=lambda t: t,
+                    key_list=KEYS_EXPANDED,
+                )
+                sg["include_tags"].update(chosen)
+                # A tag can only live in one place; remove from not_tags if moved
+                sg["not_tags"] -= set(chosen)
 
-        elif action == "rm_not":
-            if not sg["not_tags"]:
-                click.echo("⚠️  No NOT tags to remove.")
-                continue
-            chosen = pick_multi_from_list(
-                sorted(sg["not_tags"]),
-                label_fn=lambda t: t,
-                key_list=KEYS_EXPANDED,
-            )
-            sg["not_tags"] -= set(chosen)
+            elif action == "rm_include":
 
-        elif action == "toggle_not":
-            sg["is_not"] = not sg["is_not"]
-            click.echo(f"  Subgroup is now {'NOT ' if sg['is_not'] else ''}negated.")
+                if sg["include_tags"]:
+                    chosen = pick_multi_from_list(
+                        sorted(sg["include_tags"]),
+                        label_fn=lambda t: t,
+                        key_list=KEYS_EXPANDED,
+                    )
+                    sg["include_tags"] -= set(chosen)
+                else:
+                    click.echo("⚠️  No include tags to remove.")
 
-        elif action == "operator":
-            op = pick_from_list(
-                ["AND", "OR"],
-                label_fn=lambda x: x,
-                key_list="12",
-                prompt="Operator after this subgroup: ",
-            )
-            if op:
-                sg["operator_after"] = op
+            elif action == "add_not":
+                available = _available_tags_for_subgroup(
+                    selected_tag_group, sg, all_subgroups, include_own=True
+                )
+
+                if available:
+                    chosen = pick_multi_from_list(
+                        sorted(available),
+                        label_fn=lambda t: t,
+                        key_list=KEYS_EXPANDED,
+                    )
+                    sg["not_tags"].update(chosen)
+                    sg["include_tags"] -= set(chosen)
+
+                else:
+                    click.echo("⚠️  No unassigned tags available.")
+
+            elif action == "rm_not":
+                if sg["not_tags"]:
+                    chosen = pick_multi_from_list(
+                        sorted(sg["not_tags"]),
+                        label_fn=lambda t: t,
+                        key_list=KEYS_EXPANDED,
+                    )
+                    sg["not_tags"] -= set(chosen)
+                else:
+                    click.echo("⚠️  No NOT tags to remove.")
+
+            elif action == "toggle_not":
+                sg["is_not"] = not sg["is_not"]
+                click.echo(
+                    f"  Subgroup is now {'NOT ' if sg['is_not'] else ''}negated."
+                )
+
+            elif action == "operator":
+                op = pick_from_list(
+                    ["AND", "OR"],
+                    label_fn=lambda x: x,
+                    key_list="12",
+                    prompt="Operator after this subgroup: ",
+                )
+                if op:
+                    sg["operator_after"] = op
 
 
 def _available_tags_for_subgroup(
@@ -316,10 +328,12 @@ def _available_tags_for_subgroup(
     """
     assigned_elsewhere = set()
     for sg in all_subgroups:
-        if sg is current_sg:
-            continue
-        assigned_elsewhere |= sg["include_tags"]
-        assigned_elsewhere |= sg["not_tags"]
+
+        has_tag_in_other_subgroup = sg is current_sg
+
+        if not has_tag_in_other_subgroup:
+            assigned_elsewhere |= sg["include_tags"]
+            assigned_elsewhere |= sg["not_tags"]
 
     available = selected_tag_group - assigned_elsewhere
     if not include_own:
@@ -409,8 +423,6 @@ def _load_saved_subgroup(subgroups: list[dict], selected_tag_group: set):
 
 def show_basket_menu(tag_hierarchy, selected_tag_group, subgroups, title_filter):
     """Display current selection basket and return the user's chosen action."""
-    if not (selected_tag_group or title_filter):
-        return "continue"
 
     click.echo("\n" + "─" * 40)
     click.echo("🛒 Current Selection Basket:")
@@ -500,8 +512,6 @@ def navigate_and_select_tags(tag_hierarchy, selected_tag_group):
 
             history.pop()
 
-        if not history:
-            break
 
 
 def get_title_filter_from_user():
@@ -532,7 +542,11 @@ def run_selection_loop(tag_hierarchy):
     subgroups: list[dict] = []
     title_filter: str = ""
 
-    while True:
+    is_currently_selecting = True
+
+    while is_currently_selecting:
+
+        # while True:
         action = show_basket_menu(
             tag_hierarchy, selected_tag_group, subgroups, title_filter
         )
@@ -540,21 +554,18 @@ def run_selection_loop(tag_hierarchy):
         if action == "cancel":
             return set(), [], ""
 
-        if action == "clear":
+        elif action == "clear":
             selected_tag_group.clear()
             subgroups.clear()
             title_filter = ""
-            continue
-
-        if action == "title":
+ 
+        elif action == "title":
             title_filter = get_title_filter_from_user()
-            continue
-
-        if action == "subgroups":
+ 
+        elif action == "subgroups":
             subgroups = organise_into_subgroups(selected_tag_group, subgroups)
-            continue
-
-        if action == "search":
+ 
+        elif action == "search":
             # Block search if subgroups exist but tags are unassigned
             if subgroups:
                 unassigned = _unassigned_tags(selected_tag_group, subgroups)
@@ -566,10 +577,11 @@ def run_selection_loop(tag_hierarchy):
                     click.echo(
                         "   Use '📦 Organise into subgroups' to assign them first."
                     )
-                    continue
-            break
 
-        if action == "continue":
+                else:
+                    is_currently_selecting = False
+
+        elif action == "continue":
             navigate_and_select_tags(tag_hierarchy, selected_tag_group)
 
     return selected_tag_group, subgroups, title_filter

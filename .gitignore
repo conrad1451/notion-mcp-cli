@@ -11,3 +11,6 @@ listoftagnames.txt
 tools/flat_lists
 tools/checkr.py
 tools/namesearch.py
+diff_output.ansi
+diff_output.txt
+myhistory.txt

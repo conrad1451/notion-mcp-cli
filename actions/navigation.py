@@ -10,10 +10,9 @@ workflow for refining search criteria before querying Notion.
 import click
 from client import KEYS_EXPANDED, load_tag_hierarchy
 
-from utils.keyboard import get_key_input
-from utils.formatting import extract_plain_text, pick_from_list, pick_multi_from_list
-from core.search import build_filters, build_notion_filter, perform_notion_search
-from core.database import get_tags_property_name, get_database_schema
+from utils.formatting import pick_from_list, pick_multi_from_list
+from core.search import perform_notion_search
+from core.database import get_tags_property_name
 
 # ---------------------------------------------------------------------------
 # Session-level saved subgroups (persists until the Python process exits)
@@ -436,7 +435,7 @@ def _load_saved_subgroup(subgroups: list[dict], selected_tag_group: set):
 # ---------------------------------------------------------------------------
 
 
-def show_basket_menu(tag_hierarchy, selected_tag_group, subgroups, title_filter):
+def show_basket_menu(selected_tag_group, subgroups, title_filter):
     """Display current selection basket and return the user's chosen action."""
 
     click.echo("\n" + "─" * 40)
@@ -561,14 +560,12 @@ def run_selection_loop(tag_hierarchy):
     while is_currently_selecting:
 
         # while True:
-        action = show_basket_menu(
-            tag_hierarchy, selected_tag_group, subgroups, title_filter
-        )
+        action = show_basket_menu(selected_tag_group, subgroups, title_filter)
 
         if action == "cancel":
             return set(), [], ""
 
-        elif action == "clear":
+        if action == "clear":
             selected_tag_group.clear()
             subgroups.clear()
             title_filter = ""

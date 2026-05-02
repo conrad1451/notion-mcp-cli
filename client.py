@@ -1,9 +1,12 @@
+# client.py
+
+"""Notion API client setup, configuration loading, and shared constants."""
+
 import os
 import json
 from notion_client import Client
 from dotenv import load_dotenv
 import click
-
 
 load_dotenv()
 
@@ -22,7 +25,7 @@ def load_databases():
     """Loads database configurations from JSON."""
     if not os.path.exists(CONFIG_PATH):
         raise SystemExit("❌ Config file not found.")
-    with open(CONFIG_PATH) as f:
+    with open(CONFIG_PATH, encoding="utf-8") as f:
         return json.load(f).get("databases", [])
 
 
@@ -37,7 +40,6 @@ def load_tag_hierarchy(db):
     Returns:
         dict/None: The parsed hierarchy or None if failed.
     """
-    """Load and parse the tag hierarchy file."""
     try:
         tag_file = db.get("tag_file")
         if not tag_file:
@@ -45,8 +47,8 @@ def load_tag_hierarchy(db):
             return None
 
         tag_file_path = os.path.join(os.path.dirname(__file__), tag_file)
-        with open(tag_file_path, "r") as f:
+        with open(tag_file_path, "r", encoding="utf-8") as f:
             return json.load(f)
-    except Exception as e:
-        click.echo(f"❌ Could not load tag_categories.json: {e}")
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+        click.echo(f"❌ Could not load tag file: {e}")
         return None

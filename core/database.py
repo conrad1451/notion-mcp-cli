@@ -6,9 +6,11 @@ specific property types (title, multi_select tags), validating configured
 properties, and displaying available properties. Includes caching to minimize
 API calls to the Notion API.
 """
-from client import notion, _DB_SCHEMA_CACHE
 
+from client import notion, _DB_SCHEMA_CACHE
 import click
+
+from notion_client import APIResponseError
 
 
 def show_db_properties(db):
@@ -22,7 +24,7 @@ def show_db_properties(db):
         result = get_database_schema(db["id"])
         props = result.get("properties", {})
         click.echo(f"\n  Properties: {', '.join(props.keys())}")
-    except Exception as e:
+    except APIResponseError as e:
         click.echo(f"  ⚠️  Could not load properties: {e}")
 
 

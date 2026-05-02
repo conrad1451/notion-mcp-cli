@@ -7,6 +7,7 @@ guided searches through nested tag folders. Supports a 'shopping basket'
 workflow for refining search criteria before querying Notion.
 """
 
+import copy
 import click
 from client import KEYS_EXPANDED, load_tag_hierarchy
 
@@ -90,8 +91,6 @@ def _handle_organiser_action(
     elif action == "save":
         sg = _pick_subgroup(subgroups, "Save which subgroup to session?")
         if sg:
-            import copy
-
             _SESSION_SAVED_SUBGROUPS.append(copy.deepcopy(sg))
             click.echo(f"💾  Saved '{sg['name']}' to session.")
 
@@ -404,8 +403,6 @@ def _load_saved_subgroup(subgroups: list[dict], selected_tag_group: set):
     if not chosen:
         return
 
-    import copy
-
     loaded = copy.deepcopy(chosen)
 
     # Automatically add any tags from the saved subgroup into selected_tag_group
@@ -481,7 +478,7 @@ def get_tags_property_name_safe(db):
     """Safely retrieve tags property name with error handling."""
     try:
         return get_tags_property_name(db)
-    except Exception as e:
+    except ValueError as e:
         click.echo(f"❌ Could not find tags property: {e}")
         return None
 

@@ -4,7 +4,10 @@
 Provides CLI actions for creating, reading, updating, and searching pages
 in a Notion database, including multi-tag subgroup search and filtering.
 """
+
 import click
+from notion_client import APIResponseError
+
 from client import notion, KEYS, KEYS_EXPANDED, load_tag_hierarchy
 
 from core.database import get_database_schema, get_title_property_name
@@ -23,8 +26,8 @@ def action_read():
     page_id = click.prompt("\n📄 Enter page ID")
     try:
         read_page(page_id)
-    except Exception as e:
-        click.echo(f"❌ Error: {e}")
+    except APIResponseError as e:
+        click.echo(f"❌ Notion API error: {e}")
 
 
 def action_create(db):
@@ -55,8 +58,8 @@ def action_create(db):
         click.echo(f"\n✅ Page created: {title}")
         click.echo(f"   ID:  {page['id']}")
         click.echo(f"   URL: {page.get('url', '')}\n")
-    except Exception as e:
-        click.echo(f"❌ Error: {e}")
+    except APIResponseError as e:
+        click.echo(f"❌ Notion API error: {e}")
 
 
 def action_append(db):
@@ -77,8 +80,8 @@ def action_append(db):
             ],
         )
         click.echo(f"\n✅ Appended text to page {page_id}\n")
-    except Exception as e:
-        click.echo(f"❌ Error: {e}")
+    except APIResponseError as e:
+        click.echo(f"❌ Notion API error: {e}")
 
 
 # CHQ: Claude AI updated to allow searching by specific properties
@@ -88,8 +91,8 @@ def action_search(db):
     try:
         result = get_database_schema(db["id"])
         props = result.get("properties", {})
-    except Exception as e:
-        click.echo(f"❌ Could not load properties: {e}")
+    except APIResponseError as e:
+        click.echo(f"❌ Notion API error: {e}")
         return
 
     search_fields = set_search_fields(props)
@@ -113,8 +116,8 @@ def action_search(db):
     db_filter = set_db_filters(ptype, prop_name, query)
     try:
         results = notion.databases.query(database_id=db["id"], filter=db_filter)
-    except Exception as e:
-        click.echo(f"❌ Error querying database: {e}")
+    except APIResponseError as e:
+        click.echo(f"❌ Notion API error: {e}")
         return
 
     all_pages = results.get("results", [])

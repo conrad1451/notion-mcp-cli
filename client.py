@@ -1,5 +1,5 @@
 # client.py
-
+# CHQ: ClaudeAI added docstring
 """Notion API client setup, configuration loading, and shared constants."""
 
 import os
@@ -23,6 +23,7 @@ _DB_SCHEMA_CACHE = {}
 
 def load_databases():
     """Loads database configurations from JSON."""
+    # CHQ: ClaudeAI added utf-8 encoding to path
     if not os.path.exists(CONFIG_PATH):
         raise SystemExit("❌ Config file not found.")
     with open(CONFIG_PATH, encoding="utf-8") as f:
@@ -40,12 +41,14 @@ def load_tag_hierarchy(db):
     Returns:
         dict/None: The parsed hierarchy or None if failed.
     """
+    # CHQ: ClaudeAI made error more specific
     try:
         tag_file = db.get("tag_file")
         if not tag_file:
             click.echo("❌ No tag file configured for this database.")
             return None
 
+        # CHQ: ClaudeAI added utf-8 encoding to path
         tag_file_path = os.path.join(os.path.dirname(__file__), tag_file)
         with open(tag_file_path, "r", encoding="utf-8") as f:
             return json.load(f)

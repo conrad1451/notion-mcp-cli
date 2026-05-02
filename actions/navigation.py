@@ -7,7 +7,7 @@ guided searches through nested tag folders. Supports a 'shopping basket'
 workflow for refining search criteria before querying Notion.
 """
 
-import copy
+import copy  # CHQ: ClaudeAI moved import to top
 import click
 from client import KEYS_EXPANDED, load_tag_hierarchy
 
@@ -476,6 +476,7 @@ def show_basket_menu(selected_tag_group, subgroups, title_filter):
 
 def get_tags_property_name_safe(db):
     """Safely retrieve tags property name with error handling."""
+    # CHQ: ClaudeAI made error more specific
     try:
         return get_tags_property_name(db)
     except ValueError as e:

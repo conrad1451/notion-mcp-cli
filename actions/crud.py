@@ -6,7 +6,7 @@ in a Notion database, including multi-tag subgroup search and filtering.
 """
 
 import click
-from notion_client import APIResponseError
+from notion_client import APIResponseError  # CHQ: ClaudeAI imported
 
 from client import notion, KEYS, KEYS_EXPANDED, load_tag_hierarchy
 
@@ -24,6 +24,7 @@ from utils.search import set_search_fields, set_db_filters
 def action_read():
     """CLI Action: Read a specific page content using its Notion UUID."""
     page_id = click.prompt("\n📄 Enter page ID")
+    # CHQ: ClaudeAI made error more specific
     try:
         read_page(page_id)
     except APIResponseError as e:
@@ -47,6 +48,7 @@ def action_create(db):
                 },
             }
         )
+    # CHQ: ClaudeAI made error more specific
     try:
         page = notion.pages.create(
             parent={"type": "database_id", "database_id": db["id"]},
@@ -66,6 +68,7 @@ def action_append(db):
     """CLI Action: Add a text paragraph to the end of an existing page."""
     page_id = click.prompt("\n📎 Enter page ID to append to")
     text = click.prompt("Text to append")
+    # CHQ: ClaudeAI made error more specific
     try:
         notion.blocks.children.append(
             block_id=page_id,
@@ -88,6 +91,7 @@ def action_append(db):
 def action_search(db):
     """CLI Action: Search a database by a single chosen property."""
     click.echo("\n⏳ Loading database properties...")
+    # CHQ: ClaudeAI made error more specific
     try:
         result = get_database_schema(db["id"])
         props = result.get("properties", {})
@@ -114,6 +118,7 @@ def action_search(db):
     prop_name = field["label"]
 
     db_filter = set_db_filters(ptype, prop_name, query)
+    # CHQ: ClaudeAI made error more specific
     try:
         results = notion.databases.query(database_id=db["id"], filter=db_filter)
     except APIResponseError as e:

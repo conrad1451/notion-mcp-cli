@@ -20,6 +20,7 @@ def show_db_properties(db):
     Args:
         db (dict): The database config object.
     """
+    # CHQ: ClaudeAI made error more specific
     try:
         result = get_database_schema(db["id"])
         props = result.get("properties", {})

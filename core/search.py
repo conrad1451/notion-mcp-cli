@@ -8,6 +8,7 @@ subgroup-based tag filtering with per-subgroup NOT logic, whole-subgroup
 negation, AND/OR operators between subgroups, and title searches.
 """
 
+# CHQ: Claude rearranged order of imports
 import json
 import click
 from client import notion, KEYS_EXPANDED
@@ -280,6 +281,7 @@ def perform_notion_search(
         click.echo("⚠️  No filter could be constructed.")
         return
 
+    # CHQ: ClaudeAI made error more specific
     try:
         debug(f"tags_property = {tags_property}")
         debug(f"title_prop = {title_prop}")

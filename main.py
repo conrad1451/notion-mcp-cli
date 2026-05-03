@@ -1,5 +1,7 @@
 """Entry point for the Notion terminal CLI."""
 
+# CHQ: Claude AI added docstring
+
 import click
 from client import load_databases
 from actions.crud import action_read, action_create, action_search, action_append
@@ -42,6 +44,7 @@ def command_menu(db):
         if cmd is None or cmd["label"] == "Quit":
             click.echo("\nGoodbye 👋\n")
             raise SystemExit(0)
+        # CHQ: Claude AI turned elif into if
         if cmd["label"] == "Switch database":
             return  # Returns to the database selector in cli()
         else:

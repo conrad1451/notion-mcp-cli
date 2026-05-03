@@ -64,7 +64,7 @@ def action_create(db):
         click.echo(f"❌ Notion API error: {e}")
 
 
-def action_append(db):
+def action_append(_db):  # CHQ: Claude: db not currently used
     """CLI Action: Add a text paragraph to the end of an existing page."""
     page_id = click.prompt("\n📎 Enter page ID to append to")
     text = click.prompt("Text to append")

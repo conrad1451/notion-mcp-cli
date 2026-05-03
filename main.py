@@ -1,3 +1,5 @@
+"""Entry point for the Notion terminal CLI."""
+
 import click
 from client import load_databases
 from actions.crud import action_read, action_create, action_search, action_append
@@ -17,10 +19,11 @@ COMMANDS = [
     {"label": "Quit", "fn": None},
 ]
 
+
 def command_menu(db):
     """
     Displays the main action menu for a specific database.
-    
+
     Args:
         db (dict): The currently active database config object.
     """
@@ -28,7 +31,7 @@ def command_menu(db):
         click.echo(f"\n📂 Database: {db['name']}")
         show_db_properties(db)
         click.echo("─" * 40)
-        
+
         cmd = pick_from_list(
             COMMANDS,
             label_fn=lambda c: c["label"],
@@ -39,14 +42,14 @@ def command_menu(db):
         if cmd is None or cmd["label"] == "Quit":
             click.echo("\nGoodbye 👋\n")
             raise SystemExit(0)
-        elif cmd["label"] == "Switch database":
+        if cmd["label"] == "Switch database":
             return  # Returns to the database selector in cli()
         else:
             # Inside command_menu
             if cmd["fn"]:
                 try:
                     cmd["fn"](db)
-                except Exception as e:
+                except Exception as e:  # pylint: disable=broad-exception-caught
                     click.echo(f"❌ Error executing {cmd['label']}: {e}")
 
 
@@ -65,7 +68,7 @@ def cli():
             databases,
             label_fn=lambda d: d["name"],
             key_list=KEYS,
-            prompt="Select a database to work with (or any other key to quit): "
+            prompt="Select a database to work with (or any other key to quit): ",
         )
 
         if not selected_db:
@@ -73,6 +76,7 @@ def cli():
             break
 
         command_menu(selected_db)
+
 
 if __name__ == "__main__":
     cli()

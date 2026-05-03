@@ -40,9 +40,11 @@ def get_key_input() -> str:
     # import termios
 
     fd = sys.stdin.fileno()
-    old_settings = termios.tcgetattr(fd)
+    old_settings = termios.tcgetattr(
+        fd
+    )  # pylint: disable=possibly-used-before-assignment
     try:
-        tty.setraw(fd)
+        tty.setraw(fd)  # pylint: disable=possibly-used-before-assignment
         key = sys.stdin.read(1)
 
         # Handle escape sequences for arrow keys
@@ -55,4 +57,6 @@ def get_key_input() -> str:
 
         return key.lower()
     finally:
-        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+        termios.tcsetattr(
+            fd, termios.TCSADRAIN, old_settings
+        )  # pylint: disable=possibly-used-before-assignment

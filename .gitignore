@@ -14,3 +14,4 @@ tools/namesearch.py
 diff_output.ansi
 diff_output.txt
 myhistory.txt
+build_notion_filter_history.txt

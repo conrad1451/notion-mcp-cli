@@ -51,7 +51,7 @@ def _unassigned_tags(selected_tag_group: set, subgroups: list[dict]) -> set:
 
 
 # CHQ: Claude AI created function
-def _handle_organiser_action(
+def _handle_organiser_action(  # pylint: disable=too-many-branches
     action: str, subgroups: list[dict], selected_tag_group: set
 ) -> bool:
     """Handle one organiser menu action. Returns False when loop should exit."""
@@ -101,7 +101,7 @@ def _handle_organiser_action(
 
 
 # CHQ: Claude AI created function
-def _handle_edit_action(
+def _handle_edit_action(  # pylint: disable=too-many-branches
     action: str, sg: dict, selected_tag_group: set, all_subgroups: list[dict]
 ) -> bool:
     """Handle one edit-subgroup action. Returns False when done."""

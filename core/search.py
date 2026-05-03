@@ -8,14 +8,15 @@ subgroup-based tag filtering with per-subgroup NOT logic, whole-subgroup
 negation, AND/OR operators between subgroups, and title searches.
 """
 
-import click
+# CHQ: Claude rearranged order of imports
 import json
+import click
 from client import notion, KEYS_EXPANDED
-
 from core.database import get_title_property_name
 from utils.debug import debug
 from utils.formatting import browse_pages
 
+from notion_client import APIResponseError
 
 # ---------------------------------------------------------------------------
 # Low-level filter primitives
@@ -212,6 +213,7 @@ def build_notion_filter(
 # Logging
 # ---------------------------------------------------------------------------
 
+
 # CHQ: Claude AI made helper function
 def log_search_params(
     selected_tag_group: set,
@@ -279,6 +281,7 @@ def perform_notion_search(
         click.echo("⚠️  No filter could be constructed.")
         return
 
+    # CHQ: ClaudeAI made error more specific
     try:
         debug(f"tags_property = {tags_property}")
         debug(f"title_prop = {title_prop}")
@@ -294,5 +297,5 @@ def perform_notion_search(
         click.echo(f"\nFound {len(results)} result(s):")
         browse_pages(results)
 
-    except Exception as error:
-        click.echo(f"❌ Notion Query Error: {error}")
+    except APIResponseError as e:
+        click.echo(f"❌ Notion Query Error: {e}")

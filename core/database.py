@@ -7,10 +7,11 @@ properties, and displaying available properties. Includes caching to minimize
 API calls to the Notion API.
 """
 
-from client import notion, _DB_SCHEMA_CACHE
+# CHQ: Claude rearranged order of imports
 import click
-
 from notion_client import APIResponseError
+
+from client import notion, _DB_SCHEMA_CACHE
 
 
 def show_db_properties(db):

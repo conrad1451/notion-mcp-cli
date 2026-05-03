@@ -17,7 +17,8 @@ else:
     import termios  # pylint: disable=import-error
 
 
-def get_key_input() -> str:  # pylint: disable=possibly-used-before-assignment
+# pylint: disable=possibly-used-before-assignment
+def get_key_input() -> str:
     """
     Cross-platform handler to capture raw keyboard input, including escape sequences.
 

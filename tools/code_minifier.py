@@ -1,9 +1,12 @@
+"""Minifies Python source files using python_minifier."""
+
+# CHQ: Claude AI added docstring and fixed import
+
+# tools/code_minifier.py
+
 import sys
 from pathlib import Path
 import python_minifier
-
-# CHQ: Claude AI added docstring and fixed import
-"""Minifies Python source files using python_minifier."""
 
 
 def minify_file(input_path, output_path):

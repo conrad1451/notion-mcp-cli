@@ -1,4 +1,5 @@
 # core/search.py
+# pylint: disable=duplicate-code
 """Filter construction and database query execution for Notion searches.
 
 Provides utilities for building Notion API filter objects from subgroup
@@ -9,14 +10,14 @@ negation, AND/OR operators between subgroups, and title searches.
 """
 
 # CHQ: Claude rearranged order of imports
+from notion_client import APIResponseError
+
 import json
 import click
 from client import notion, KEYS_EXPANDED
 from core.database import get_title_property_name
 from utils.debug import debug
 from utils.formatting import browse_pages
-
-from notion_client import APIResponseError
 
 # ---------------------------------------------------------------------------
 # Low-level filter primitives

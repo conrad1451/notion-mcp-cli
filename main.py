@@ -47,13 +47,14 @@ def command_menu(db):
         # CHQ: Claude AI turned elif into if
         if cmd["label"] == "Switch database":
             return  # Returns to the database selector in cli()
-        else:
-            # Inside command_menu
-            if cmd["fn"]:
-                try:
-                    cmd["fn"](db)
-                except Exception as e:  # pylint: disable=broad-exception-caught
-                    click.echo(f"❌ Error executing {cmd['label']}: {e}")
+
+        # CHQ: Claude: removed else and de-indent code block
+        # Inside command_menu
+        if cmd["fn"]:
+            try:
+                cmd["fn"](db)
+            except Exception as e:  # pylint: disable=broad-exception-caught
+                click.echo(f"❌ Error executing {cmd['label']}: {e}")
 
 
 @click.command()

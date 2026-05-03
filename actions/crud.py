@@ -8,15 +8,10 @@ in a Notion database, including multi-tag subgroup search and filtering.
 import click
 from notion_client import APIResponseError  # CHQ: ClaudeAI imported
 
-from client import notion, KEYS, KEYS_EXPANDED, load_tag_hierarchy
+from client import notion, KEYS, KEYS_EXPANDED
 
 from core.database import get_database_schema, get_title_property_name
-from core.search import perform_notion_search
-from actions.navigation import (
-    run_selection_loop,
-    get_tags_property_name_safe,
-    pick_from_list,
-)
+from actions.navigation import pick_from_list
 from utils.formatting import browse_pages, read_page
 from utils.search import set_search_fields, set_db_filters
 
@@ -137,26 +132,3 @@ def action_search(db):
 
     click.echo(f"\nFound {len(pages)} result(s):\n")
     browse_pages(pages)
-
-
-def action_search_multi_tags(db):
-    """CLI Action: Search a database using the hierarchical multi-tag selector."""
-    tag_hierarchy = load_tag_hierarchy(db)
-    if not tag_hierarchy:
-        return
-
-    tags_property = get_tags_property_name_safe(db)
-    if not tags_property:
-        return
-
-    # run_selection_loop now returns (selected_tag_group, subgroups, title_filter)
-    selected_tag_group, subgroups, title_filter = run_selection_loop(tag_hierarchy)
-
-    if selected_tag_group or title_filter:
-        perform_notion_search(
-            db,
-            selected_tag_group,
-            subgroups,
-            title_filter,
-            tags_property,
-        )

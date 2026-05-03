@@ -17,6 +17,7 @@ else:
     import termios  # pylint: disable=import-error
 
 
+# pylint: disable=possibly-used-before-assignment
 def get_key_input() -> str:
     """
     Cross-platform handler to capture raw keyboard input, including escape sequences.
@@ -41,6 +42,7 @@ def get_key_input() -> str:
 
     fd = sys.stdin.fileno()
     old_settings = termios.tcgetattr(fd)
+
     try:
         tty.setraw(fd)
         key = sys.stdin.read(1)

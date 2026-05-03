@@ -2,11 +2,14 @@ import sys
 from pathlib import Path
 import python_minifier
 
+# CHQ: Claude AI added docstring and fixed import
 """Minifies Python source files using python_minifier."""
 
 
 def minify_file(input_path, output_path):
     """Minify a Python file and write the result to output_path."""
+
+    # CHQ: Claude AI made the second error more specific
     try:
         # Read the original Python code
         code = Path(input_path).read_text(encoding="utf-8")

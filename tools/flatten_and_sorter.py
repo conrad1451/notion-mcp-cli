@@ -1,3 +1,5 @@
+"""Flattens and sorts tags from a nested JSON hierarchy into a flat sorted list."""
+
 # CHQ: ChatGPT generated this tool to flatten and sort the tags from a json
 #      file so that file could be compared with another to catch
 #      missing tags that must be added to the json file. This helps keep
@@ -8,7 +10,8 @@
 import json
 
 
-def flatten_and_sort_tags(data):
+def flatten_and_sort_tags(tag_data):
+    """Recursively flatten a nested tag structure and return sorted list of tags."""
     results = []
 
     def walk(node):
@@ -22,7 +25,7 @@ def flatten_and_sort_tags(data):
             for value in node.values():
                 walk(value)
 
-    walk(data)
+    walk(tag_data)
 
     return sorted(results, key=lambda s: s.lower())
 
@@ -64,8 +67,8 @@ output_list = [
 ]
 
 # input_file = "../database_metadata/tag_categories.json"
-input_file = input_list[-2]
-output_file = output_list[-2]
+input_file = input_list[-1]  # pylint: disable=invalid-name
+output_file = output_list[-1]  # pylint: disable=invalid-name
 
 with open(input_file, "r", encoding="utf-8") as f:
     data = json.load(f)

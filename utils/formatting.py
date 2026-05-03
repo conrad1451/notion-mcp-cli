@@ -7,10 +7,11 @@ paginating long content, and building interactive selection UIs with single-key
 and multi-select prompts. Includes terminal utilities like text wrapping and
 clickable hyperlinks.
 """
-import click
-import readchar
+
 import shutil
 from typing import List
+import click
+import readchar
 
 from client import notion, KEYS_FEW, KEYS_EXPANDED
 from utils.keyboard import get_key_input
@@ -82,54 +83,36 @@ def wrap_text(text: str, max_width: int) -> List[str]:
 
 # CHQ: ChatGPT created function
 def format_property_value(prop_data):
-    """
-    Parses various Notion property types into human-readable strings.
-
-    Args:
-        prop_data (dict): The specific property data from a page.
-
-    Returns:
-        str/int/bool: The formatted value based on the property type.
-    """
+    """Parse a Notion property into a human-readable value."""
     type_name = prop_data.get("type")
 
-    val_to_return = None  # CHQ: Gemini AI fixed this
+    simple_types = {
+        "url",
+        "number",
+        "checkbox",
+        "date",
+        "email",
+        "phone_number",
+        "created_time",
+        "last_edited_time",
+    }
 
-    if type_name == "rich_text":
-        val_to_return = extract_plain_text(prop_data.get("rich_text", []))
-    elif type_name == "title":
-        val_to_return = extract_plain_text(prop_data.get("title", []))
-    elif type_name == "multi_select":
-        val_to_return = ", ".join(
-            i.get("name", "") for i in prop_data.get("multi_select", [])
-        )
-    elif type_name == "select":
-        val_to_return = (prop_data.get("select") or {}).get("name")
-    elif type_name == "url":
-        val_to_return = prop_data.get("url")  # CHQ: Gemini AI fixed typo
-    elif type_name == "number":
-        val_to_return = prop_data.get("number")
-    elif type_name == "checkbox":
-        val_to_return = prop_data.get("checkbox")
-    elif type_name == "date":
-        val_to_return = prop_data.get("date")
-    elif type_name == "email":
-        val_to_return = prop_data.get("email")
-    elif type_name == "phone_number":
-        val_to_return = prop_data.get("phone_number")
-    elif type_name == "status":
-        val_to_return = (prop_data.get("status") or {}).get("name")
-    elif type_name == "created_time":
-        val_to_return = prop_data.get("created_time")
-    elif type_name == "last_edited_time":
-        val_to_return = prop_data.get("last_edited_time")
+    if type_name in simple_types:
+        return prop_data.get(type_name)
 
-    elif type_name == "people":
-        val_to_return = ", ".join(
-            p.get("name", "Unknown") for p in prop_data.get("people", [])
-        )
+    if type_name in ("rich_text", "title"):
+        return extract_plain_text(prop_data.get(type_name, []))
 
-    return val_to_return
+    if type_name == "multi_select":
+        return ", ".join(i.get("name", "") for i in prop_data.get("multi_select", []))
+
+    if type_name in ("select", "status"):
+        return (prop_data.get(type_name) or {}).get("name")
+
+    if type_name == "people":
+        return ", ".join(p.get("name", "Unknown") for p in prop_data.get("people", []))
+
+    return None
 
 
 def blocks_to_text(blocks):
@@ -175,6 +158,7 @@ def blocks_to_text(blocks):
 
 
 def print_page_properties(page_id, properties):
+    """Display all properties for a Notion page."""
     # source: ChatGPT (via Bing)
     if not properties:
         click.echo("No properties found for this page.")
@@ -201,7 +185,6 @@ def paginate_content(
     Returns:
         List[str]: A list of content strings for each page.
     """
-    """Split content into pages based on line count."""
     lines = content.split("\n")
     pages = []
     current_page = []
@@ -265,7 +248,7 @@ def display_paginated(page_data: dict, pages: List[str]):
             if key.lower() == "q":
                 click.clear()
                 break
-            elif key in ["right", "d", "D"] and current_page < total_pages - 1:
+            if key in ["right", "d", "D"] and current_page < total_pages - 1:
                 current_page += 1
             elif key in ["left", "a", "A"] and current_page > 0:
                 current_page -= 1
@@ -371,7 +354,7 @@ def browse_pages(pages):
 
         selected_page = pick_from_list(
             pages,
-            label_fn=lambda p: get_page_title(p),
+            label_fn=get_page_title,  # CHQ: Claude AI turned this from lambda p: get_page_title(p)
             key_list=KEYS_EXPANDED,
             url_fn=lambda p: p.get("url"),
             prompt="Choice: ",
@@ -451,7 +434,7 @@ def pick_multi_from_list(
             return [key_to_item[k] for k in key_list if k in selected_keys]
 
         # Handle Selection Keys (e.g., '1', '2', 'a', 'b')
-        elif key in key_to_item:
+        if key in key_to_item:
             if key in selected_keys:
                 selected_keys.discard(key)
             else:

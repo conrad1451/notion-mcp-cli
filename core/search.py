@@ -10,10 +10,11 @@ negation, AND/OR operators between subgroups, and title searches.
 """
 
 # CHQ: Claude rearranged order of imports
-from notion_client import APIResponseError
 
 import json
 import click
+from notion_client import APIResponseError
+
 from client import notion, KEYS_EXPANDED
 from core.database import get_title_property_name
 from utils.debug import debug

@@ -23,7 +23,7 @@ _DB_SCHEMA_CACHE = {}
 
 def load_databases():
     """Loads database configurations from JSON."""
-    # CHQ: ClaudeAI added utf-8 encoding to path
+    # CHQ: ClaudeAI added utf-8 encoding to filepath
     if not os.path.exists(CONFIG_PATH):
         raise SystemExit("❌ Config file not found.")
     with open(CONFIG_PATH, encoding="utf-8") as f:

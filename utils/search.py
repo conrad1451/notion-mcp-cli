@@ -1,3 +1,6 @@
+"""Search field filtering and Notion API filter construction utilities."""
+
+# pylint: disable=duplicate-code
 # utils/search.py
 
 import click
@@ -34,7 +37,6 @@ def set_search_fields(props):
 
     if not search_fields:
         click.echo("No searchable properties found.")
-        # return
 
     return search_fields
 
@@ -67,10 +69,10 @@ def set_db_filters(ptype, prop_name, query):
             db_filter = {"property": prop_name, "number": {"equals": float(query)}}
         except ValueError:
             click.echo("❌ Invalid number.")
-            return
+            return None
     elif ptype in ("email", "phone_number", "url"):
         db_filter = {"property": prop_name, ptype: {"contains": query}}
     else:
         click.echo(f"⚠️ Unsupported filter type: {ptype}")
-        # return
+        return None
     return db_filter

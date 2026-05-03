@@ -6,6 +6,7 @@ and special characters on both Windows (using msvcrt) and Unix-like systems (usi
 tty/termios). Normalizes escape sequences to common key names like 'left', 'right',
 'home', and 'end'.
 """
+
 import sys
 import os
 
@@ -34,24 +35,24 @@ def get_key_input() -> str:
             special_keys = {b"M": "left", b"P": "right", b"G": "home", b"O": "end"}
             return special_keys.get(key, key.decode("utf-8", errors="ignore").lower())
         return key.decode("utf-8", errors="ignore").lower()
-    else:  # macOS and Linux
-        # import tty
-        # import termios
+    # macOS and Linux
+    # import tty
+    # import termios
 
-        fd = sys.stdin.fileno()
-        old_settings = termios.tcgetattr(fd)
-        try:
-            tty.setraw(fd)
-            key = sys.stdin.read(1)
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    try:
+        tty.setraw(fd)
+        key = sys.stdin.read(1)
 
-            # Handle escape sequences for arrow keys
-            if key == "\x1b":
-                next_char = sys.stdin.read(1)
-                if next_char == "[":
-                    arrow = sys.stdin.read(1)
-                    arrows = {"A": "up", "B": "down", "C": "right", "D": "left"}
-                    return arrows.get(arrow, arrow.lower())
+        # Handle escape sequences for arrow keys
+        if key == "\x1b":
+            next_char = sys.stdin.read(1)
+            if next_char == "[":
+                arrow = sys.stdin.read(1)
+                arrows = {"A": "up", "B": "down", "C": "right", "D": "left"}
+                return arrows.get(arrow, arrow.lower())
 
-            return key.lower()
-        finally:
-            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+        return key.lower()
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
